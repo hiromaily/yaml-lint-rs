@@ -73,11 +73,7 @@ impl Rule for HyphensRule {
                 // This could be a block scalar indicator like "-|" or "->"
                 // or an anchor/alias, so we should be careful
                 let first_char = after_hyphen.chars().next();
-                if first_char != Some('|')
-                    && first_char != Some('>')
-                    && first_char != Some('&')
-                    && first_char != Some('*')
-                {
+                if !matches!(first_char, Some('|') | Some('>') | Some('&') | Some('*')) {
                     problems.push(LintProblem::new(
                         line_idx + 1,
                         leading_spaces + 2, // Position after the hyphen
