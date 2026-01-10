@@ -107,3 +107,75 @@ validate-rule-indentation: release
 validate-all-rules: validate-rule-trailing-spaces validate-rule-line-length validate-rule-colons validate-rule-duplicates validate-rule-indentation
 	@echo ""
 	@echo "=== All rule validations complete ==="
+
+# ==============================================================================
+# Fix Option Tests
+# ==============================================================================
+
+# Test --fix option (dry-run mode)
+.PHONY: test-fix-dry-run
+test-fix-dry-run: release
+	@echo "=== Testing --fix --dry-run option ==="
+	@echo ""
+	@echo "--- Dry-run on trailing-spaces fixture ---"
+	@./target/release/yaml-lint --dry-run tests/fixtures/invalid/trailing-spaces.yaml
+	@echo ""
+	@echo "--- Dry-run on all invalid fixtures ---"
+	@./target/release/yaml-lint --dry-run tests/fixtures/invalid/ || true
+	@echo ""
+	@echo "=== Dry-run tests complete ==="
+
+# Test --fix option with actual file modification (uses temp files)
+.PHONY: test-fix
+test-fix: release
+	@echo "=== Testing --fix option ==="
+	@echo ""
+	@# Create temp directory
+	@mkdir -p /tmp/yaml-lint-test
+	@# Copy fixtures to temp
+	@cp tests/fixtures/invalid/trailing-spaces.yaml /tmp/yaml-lint-test/
+	@echo "--- Before fix ---"
+	@./target/release/yaml-lint /tmp/yaml-lint-test/trailing-spaces.yaml || true
+	@echo ""
+	@echo "--- Applying fix ---"
+	@./target/release/yaml-lint --fix /tmp/yaml-lint-test/trailing-spaces.yaml
+	@echo ""
+	@echo "--- After fix ---"
+	@./target/release/yaml-lint /tmp/yaml-lint-test/trailing-spaces.yaml && echo "✓ File is now clean" || echo "✗ File still has issues"
+	@echo ""
+	@# Cleanup
+	@rm -rf /tmp/yaml-lint-test
+	@echo "=== Fix tests complete ==="
+
+# Test --fix with multiple files
+.PHONY: test-fix-multi
+test-fix-multi: release
+	@echo "=== Testing --fix with multiple files ==="
+	@echo ""
+	@mkdir -p /tmp/yaml-lint-test
+	@cp tests/fixtures/invalid/trailing-spaces.yaml /tmp/yaml-lint-test/file1.yaml
+	@cp tests/fixtures/invalid/trailing-spaces.yaml /tmp/yaml-lint-test/file2.yaml
+	@echo "key: value" > /tmp/yaml-lint-test/file3.yaml  # No newline at end
+	@echo ""
+	@echo "--- Fixing all files ---"
+	@./target/release/yaml-lint --fix /tmp/yaml-lint-test/
+	@echo ""
+	@echo "--- Verifying fixes ---"
+	@./target/release/yaml-lint /tmp/yaml-lint-test/ && echo "✓ All files are clean" || echo "✗ Some files still have issues"
+	@rm -rf /tmp/yaml-lint-test
+	@echo ""
+	@echo "=== Multi-file fix tests complete ==="
+
+# Run fix-related unit tests
+.PHONY: test-fix-unit
+test-fix-unit:
+	@echo "=== Running fix unit tests ==="
+	cargo test fix --all -- --nocapture
+	@echo ""
+	@echo "=== Fix unit tests complete ==="
+
+# Run all fix tests
+.PHONY: test-fix-all
+test-fix-all: test-fix-unit test-fix-dry-run test-fix test-fix-multi
+	@echo ""
+	@echo "=== All fix tests complete ==="

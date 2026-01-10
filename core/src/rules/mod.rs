@@ -53,6 +53,17 @@ pub trait Rule: Send + Sync + std::fmt::Debug {
     fn default_level(&self) -> RuleLevel {
         RuleLevel::Error
     }
+
+    /// Returns whether this rule supports auto-fixing
+    fn is_fixable(&self) -> bool {
+        false
+    }
+
+    /// Fix the content for a specific problem
+    /// Returns the fixed content if the fix was successful, None otherwise
+    fn fix(&self, _content: &str, _problem: &LintProblem) -> Option<String> {
+        None
+    }
 }
 
 /// Registry of all available rules

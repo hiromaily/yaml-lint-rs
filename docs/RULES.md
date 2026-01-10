@@ -8,6 +8,7 @@ This document describes all the linting rules implemented in yaml-lint-rs.
 
 **Level**: Error (default)
 **Configurable**: No
+**Fixable**: ✅ Yes
 
 Detects whitespace (spaces or tabs) at the end of lines.
 
@@ -27,6 +28,7 @@ key: value
 
 **Level**: Error (default)
 **Configurable**: Yes
+**Fixable**: ❌ No (requires semantic understanding)
 
 Enforces a maximum line length.
 
@@ -57,6 +59,7 @@ key: |
 
 **Level**: Disable (default)
 **Configurable**: Yes
+**Fixable**: ❌ No
 
 Requires or forbids the `---` document start marker.
 
@@ -87,6 +90,7 @@ key: value
 
 **Level**: Error (default)
 **Configurable**: Yes (future)
+**Fixable**: ❌ No (planned)
 
 Validates spacing around colons in key-value mappings.
 
@@ -109,6 +113,7 @@ key: value
 
 **Level**: Error (default)
 **Configurable**: No
+**Fixable**: ❌ No (ambiguous which to keep)
 
 Detects duplicate keys in YAML mappings.
 
@@ -142,6 +147,7 @@ parent2:
 
 **Level**: Error (default)
 **Configurable**: Yes
+**Fixable**: ❌ No (planned)
 
 Validates consistent indentation throughout the document.
 
@@ -189,6 +195,7 @@ list:
 
 **Level**: Error (default)
 **Configurable**: No
+**Fixable**: ✅ Yes
 
 Requires files to end with a newline character.
 
@@ -213,6 +220,7 @@ key: value
 
 **Level**: Error (default)
 **Configurable**: Yes
+**Fixable**: ✅ Yes
 
 Limits consecutive empty lines in YAML files.
 
@@ -249,6 +257,7 @@ key2: value2  # 1 empty line - ok
 
 **Level**: Error (default)
 **Configurable**: Yes
+**Fixable**: ❌ No (planned)
 
 Controls spacing after list item hyphens in YAML sequences.
 

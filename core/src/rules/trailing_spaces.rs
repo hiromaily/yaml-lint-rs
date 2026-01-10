@@ -37,6 +37,33 @@ impl Rule for TrailingSpacesRule {
     fn default_level(&self) -> RuleLevel {
         RuleLevel::Error
     }
+
+    fn is_fixable(&self) -> bool {
+        true
+    }
+
+    fn fix(&self, content: &str, _problem: &LintProblem) -> Option<String> {
+        // Check if there's anything to fix to avoid unnecessary string allocation
+        if !content
+            .lines()
+            .any(|line| line.ends_with(' ') || line.ends_with('\t'))
+        {
+            return None;
+        }
+
+        let mut result = content
+            .lines()
+            .map(|line| line.trim_end())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // Preserve original trailing newline if it existed
+        if content.ends_with('\n') {
+            result.push('\n');
+        }
+
+        Some(result)
+    }
 }
 
 #[cfg(test)]

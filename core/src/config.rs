@@ -188,6 +188,18 @@ impl Config {
     pub fn get_rule_level(&self, rule_name: &str) -> Option<RuleLevel> {
         self.rules.get(rule_name).copied()
     }
+
+    /// Create a RuleRegistry configured according to this Config
+    pub fn create_registry(&self) -> crate::rules::RuleRegistry {
+        let mut registry = crate::rules::RuleRegistry::with_defaults();
+
+        // Apply rule levels from config
+        for (rule_name, level) in &self.rules {
+            registry.set_level(rule_name, *level);
+        }
+
+        registry
+    }
 }
 
 impl Default for Config {

@@ -4,6 +4,7 @@
 //! for building YAML linters.
 
 pub mod config;
+pub mod fixer;
 pub mod linter;
 pub mod output;
 pub mod problem;
@@ -11,6 +12,7 @@ pub mod rules;
 
 // Re-export main types for convenience
 pub use config::Config;
+pub use fixer::{FixResult, Fixer};
 pub use linter::Linter;
 pub use problem::{LintLevel, LintProblem};
 pub use rules::{Rule, RuleRegistry};
