@@ -1,0 +1,75 @@
+---
+# Complex valid YAML with various constructs
+metadata:
+  name: complex-example
+  version: 2.0.0
+  authors:
+    - name: Alice
+      email: alice@example.com
+    - name: Bob
+      email: bob@example.com
+
+configuration:
+  database:
+    host: localhost
+    port: 5432
+    credentials:
+      username: admin
+      password: secret
+
+  cache:
+    enabled: true
+    ttl: 3600
+    backends:
+      - redis
+      - memcached
+
+  features:
+    - name: feature-a
+      enabled: true
+      options:
+        max_retries: 3
+        timeout: 30
+    - name: feature-b
+      enabled: false
+
+special_values:
+  string: "quoted string with: colon"
+  single_quoted: 'single quoted'
+  number: 42
+  float: 3.14159
+  boolean_true: true
+  boolean_false: false
+  null_value: null
+  empty_string: ""
+
+multiline_strings:
+  literal: |
+    This is a literal block scalar.
+    Line breaks are preserved.
+    Good for code snippets.
+
+  folded: >
+    This is a folded block scalar.
+    Line breaks become spaces.
+    Good for long text.
+
+nested_lists:
+  matrix:
+    - - 1
+      - 2
+      - 3
+    - - 4
+      - 5
+      - 6
+
+anchors_and_aliases:
+  default_settings: &defaults
+    timeout: 30
+    retries: 3
+  production:
+    <<: *defaults
+    timeout: 60
+  development:
+    <<: *defaults
+    debug: true

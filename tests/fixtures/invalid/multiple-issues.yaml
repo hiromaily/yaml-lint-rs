@@ -1,0 +1,7 @@
+# File with multiple different rule violations
+name : value with space before colon   
+name: duplicate key
+very_long_description: this is an extremely long line that exceeds the default maximum line length of 80 characters
+nested:
+   wrong_indent: 3 spaces
+  correct: 2 spaces

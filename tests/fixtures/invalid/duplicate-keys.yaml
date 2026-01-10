@@ -1,0 +1,14 @@
+# File with duplicate keys at various levels
+name: first_value
+version: 1.0
+name: second_value
+
+nested:
+  key: value1
+  another: test
+  key: value2
+
+deep:
+  level1:
+    item: original
+    item: duplicate

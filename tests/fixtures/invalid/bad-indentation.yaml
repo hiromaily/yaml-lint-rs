@@ -1,0 +1,7 @@
+# File with tab indentation (tabs are always detected as errors)
+root:
+	tab_indented: bad
+	another_tab: also bad
+nested:
+	child:
+		deep_tab: very bad

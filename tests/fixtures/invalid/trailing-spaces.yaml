@@ -1,0 +1,7 @@
+# File with trailing spaces (spaces at end of lines)
+key: value   
+another: value
+third: test  
+multiline: |
+  text with trailing space   
+  more text

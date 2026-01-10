@@ -1,0 +1,9 @@
+# File with bad colon spacing
+key : value
+another:  value
+correct: value
+multiple  :   issues
+also_bad :  here
+nested:
+  child : bad
+  grandchild:  also_bad

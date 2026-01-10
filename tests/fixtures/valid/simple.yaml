@@ -1,0 +1,13 @@
+# Simple valid YAML file
+name: yaml-lint-rs
+version: 1.0.0
+description: A fast YAML linter
+
+settings:
+  enabled: true
+  debug: false
+
+list:
+  - item1
+  - item2
+  - item3

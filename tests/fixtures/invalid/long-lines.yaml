@@ -1,0 +1,6 @@
+# File with lines exceeding 80 characters
+short: value
+very_long_key: this is a very long value that definitely exceeds the maximum line length of eighty characters allowed
+another_long: Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore
+normal: ok
+description: This line is also way too long and should trigger the line-length rule because it has more than 80 characters

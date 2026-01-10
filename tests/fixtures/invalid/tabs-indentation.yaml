@@ -1,0 +1,6 @@
+# File with tab characters in indentation
+root:
+	tab_indented: bad
+  space_indented: ok
+mixed:
+	 tab_and_space: very bad

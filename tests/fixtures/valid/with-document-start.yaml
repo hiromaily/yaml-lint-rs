@@ -1,0 +1,8 @@
+---
+# Valid YAML with explicit document start marker
+name: document-start-example
+value: 123
+items:
+  - one
+  - two
+  - three

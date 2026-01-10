@@ -1,0 +1,10 @@
+# Valid YAML with empty values and edge cases
+empty_mapping:
+nested_empty:
+  child:
+empty_list: []
+empty_mapping_inline: {}
+null_explicit: null
+tilde_null: ~
+empty_string: ""
+single_quote_empty: ''

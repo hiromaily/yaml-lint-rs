@@ -1,0 +1,9 @@
+# Valid YAML without document start marker
+key: value
+nested:
+  item1: value1
+  item2: value2
+list:
+  - one
+  - two
+  - three

@@ -1,0 +1,79 @@
+---
+# Sample YAML file for testing yaml-lint-rs
+# This file demonstrates various YAML constructs
+
+project:
+  name: yaml-lint-rs
+  version: 0.1.0
+  description: A fast YAML linter written in Rust
+
+settings:
+  enabled: true
+  max_depth: 10
+  timeout: 30
+
+rules:
+  - name: trailing-spaces
+    level: error
+    enabled: true
+
+  - name: line-length
+    level: error
+    options:
+      max: 80
+
+  - name: indentation
+    level: error
+    options:
+      spaces: 2
+
+nested_structure:
+  level1:
+    level2:
+      level3:
+        deep_value: This is deeply nested
+        another: value
+
+list_examples:
+  simple_list:
+    - item1
+    - item2
+    - item3
+
+  nested_list:
+    - name: first
+      value: 1
+    - name: second
+      value: 2
+
+  mixed:
+    - simple
+    - complex:
+        nested: true
+        value: 42
+
+special_values:
+  string: "quoted string"
+  number: 42
+  float: 3.14
+  boolean: true
+  null_value: null
+
+multiline:
+  literal: |
+    This is a literal block scalar.
+    Newlines are preserved.
+    Indentation is preserved.
+
+  folded: >
+    This is a folded block scalar.
+    Long lines are folded into a single line.
+    Good for long text.
+
+environment:
+  development:
+    host: localhost
+    port: 8080
+  production:
+    host: example.com
+    port: 443

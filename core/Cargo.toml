@@ -1,0 +1,17 @@
+[package]
+name = "yaml-lint-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core YAML linting engine"
+
+[dependencies]
+yaml-rust2 = { workspace = true }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+thiserror = { workspace = true }
+regex = "1.11"
+indexmap = { version = "2.6", features = ["serde"] }
+colored = "2.1"
