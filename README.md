@@ -190,12 +190,16 @@ ignore: |
    - Level: Error
    - POSIX standard compliance
 
+8. **empty-lines** - Limits consecutive blank lines
+   - Level: Error
+   - Options: `max` (default: 2), `max-start` (0), `max-end` (0)
+
 ### 📋 Future Rules
 
-Additional 16 rules planned for full yamllint compatibility:
-- truthy, hyphens, comments, empty-lines
-- braces, brackets, commas, new-lines
-- comments-indentation, document-end, empty-values
+Additional 15 rules planned for full yamllint compatibility:
+- truthy, hyphens, comments, new-lines
+- braces, brackets, commas, empty-values
+- comments-indentation, document-end
 - float-values, octal-values, quoted-strings, key-ordering
 
 ## Exit Codes

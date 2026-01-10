@@ -209,6 +209,42 @@ key: value
 
 **Note**: Empty files are considered valid.
 
+### empty-lines
+
+**Level**: Error (default)
+**Configurable**: Yes
+
+Limits consecutive empty lines in YAML files.
+
+**Configuration**:
+```yaml
+rules:
+  empty-lines:
+    max: 2         # Maximum consecutive empty lines (default: 2)
+    max-start: 0   # Maximum empty lines at file start (default: 0)
+    max-end: 0     # Maximum empty lines at file end (default: 0)
+```
+
+**Why it matters**: Excessive blank lines reduce readability and make files harder to navigate.
+
+**Examples**:
+
+```yaml
+# Bad (with max: 2)
+key1: value1
+
+
+
+key2: value2  # 3 empty lines - error
+
+# Good
+key1: value1
+
+key2: value2  # 1 empty line - ok
+```
+
+**Note**: Lines containing only whitespace are considered empty.
+
 ## Rule Levels
 
 Each rule can be configured with one of three levels:
@@ -234,6 +270,7 @@ Most rules as warnings:
 - `colons`: warning
 - `indentation`: warning
 - `new-line-at-end-of-file`: warning
+- `empty-lines`: warning
 - `key-duplicates`: error (kept as error)
 - `document-start`: disabled
 
@@ -254,9 +291,6 @@ Enforce comment formatting and spacing.
 
 ### braces / brackets
 Control spacing in flow collections `{}` and `[]`.
-
-### empty-lines
-Limit consecutive blank lines.
 
 ### comments-indentation
 Enforce that comments are indented like content.
