@@ -49,6 +49,15 @@ impl Rule for HyphensRule {
                 continue;
             }
 
+            // Skip document markers (--- and ...)
+            if trimmed == "---"
+                || trimmed == "..."
+                || trimmed.starts_with("---")
+                || trimmed.starts_with("...")
+            {
+                continue;
+            }
+
             // Check if this is a list item (starts with -)
             if !trimmed.starts_with('-') {
                 continue;
@@ -256,6 +265,38 @@ mod tests {
     #[test]
     fn test_alias() {
         let yaml = "list:\n  - *alias\n";
+        let context = LintContext::new(yaml.to_string());
+        let rule = HyphensRule::new();
+        let problems = rule.check(&context);
+
+        assert!(problems.is_empty());
+    }
+
+    #[test]
+    fn test_document_start_marker() {
+        let yaml = "---\nkey: value\n";
+        let context = LintContext::new(yaml.to_string());
+        let rule = HyphensRule::new();
+        let problems = rule.check(&context);
+
+        // Document start marker should not be flagged
+        assert!(problems.is_empty());
+    }
+
+    #[test]
+    fn test_document_end_marker() {
+        let yaml = "key: value\n...\n";
+        let context = LintContext::new(yaml.to_string());
+        let rule = HyphensRule::new();
+        let problems = rule.check(&context);
+
+        // Document end marker should not be flagged
+        assert!(problems.is_empty());
+    }
+
+    #[test]
+    fn test_document_with_list() {
+        let yaml = "---\nlist:\n  - item1\n  - item2\n";
         let context = LintContext::new(yaml.to_string());
         let rule = HyphensRule::new();
         let problems = rule.check(&context);
