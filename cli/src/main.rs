@@ -214,20 +214,7 @@ fn is_yaml_file(path: &std::path::Path) -> bool {
 
 /// Configure color output based on mode and environment
 fn configure_colors(mode: &ColorMode) {
-    // Respect NO_COLOR environment variable (https://no-color.org/)
-    let no_color = std::env::var("NO_COLOR").is_ok();
-
-    let enable_colors = match mode {
-        ColorMode::Always => true,
-        ColorMode::Never => false,
-        ColorMode::Auto => !no_color && io::stdout().is_terminal(),
-    };
-
-    if enable_colors {
-        colored::control::set_override(true);
-    } else {
-        colored::control::set_override(false);
-    }
+    colored::control::set_override(should_use_colors(mode));
 }
 
 /// Check if colors should be used based on mode and environment
