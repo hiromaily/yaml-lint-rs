@@ -150,6 +150,68 @@ impl Rule for EmptyLinesRule {
     fn default_level(&self) -> RuleLevel {
         RuleLevel::Error
     }
+
+    fn is_fixable(&self) -> bool {
+        true
+    }
+
+    fn fix(&self, content: &str, _problem: &LintProblem) -> Option<String> {
+        let lines: Vec<&str> = content.lines().collect();
+        if lines.is_empty() {
+            return None;
+        }
+
+        let mut result_lines: Vec<&str> = Vec::new();
+
+        // Skip empty lines at start (keep max_start)
+        let mut start_empty_count = 0;
+        let mut skip_until = 0;
+        for (idx, line) in lines.iter().enumerate() {
+            if line.trim().is_empty() {
+                start_empty_count += 1;
+            } else {
+                skip_until = idx;
+                break;
+            }
+        }
+        // Add allowed empty lines at start
+        let start_empty_to_add = self.max_start.min(start_empty_count);
+        result_lines.extend(std::iter::repeat_n("", start_empty_to_add));
+
+        // Process middle content
+        let mut consecutive_empty = 0;
+        for (idx, line) in lines.iter().enumerate().skip(skip_until) {
+            let is_last_content_line =
+                idx == lines.len() - 1 || lines[idx + 1..].iter().all(|l| l.trim().is_empty());
+
+            if line.trim().is_empty() {
+                consecutive_empty += 1;
+                // Don't add yet, wait until we know how many to add
+            } else {
+                // Add up to max empty lines before this content
+                let empty_to_add = consecutive_empty.min(self.max);
+                result_lines.extend(std::iter::repeat_n("", empty_to_add));
+                consecutive_empty = 0;
+
+                result_lines.push(line);
+
+                // If this is the last content line, handle trailing empty lines
+                if is_last_content_line {
+                    let end_empty_count = lines.len() - idx - 1;
+                    let end_empty_to_add = self.max_end.min(end_empty_count);
+                    result_lines.extend(std::iter::repeat_n("", end_empty_to_add));
+                    break;
+                }
+            }
+        }
+
+        let mut result = result_lines.join("\n");
+        if content.ends_with('\n') {
+            result.push('\n');
+        }
+
+        Some(result)
+    }
 }
 
 #[cfg(test)]

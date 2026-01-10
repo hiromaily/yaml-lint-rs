@@ -3,10 +3,11 @@
 use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use is_terminal::IsTerminal;
+use std::fs;
 use std::io;
 use std::path::PathBuf;
 use walkdir::WalkDir;
-use yaml_lint_core::{Config, LintLevel, Linter};
+use yaml_lint_core::{Config, Fixer, LintLevel, Linter};
 
 /// Color mode for output
 #[derive(Debug, Clone, Copy, ValueEnum, Default)]
@@ -51,6 +52,14 @@ struct Cli {
     /// List files that would be linted
     #[arg(long)]
     list_files: bool,
+
+    /// Auto-fix problems where possible
+    #[arg(long)]
+    fix: bool,
+
+    /// Show what would be fixed without making changes
+    #[arg(long)]
+    dry_run: bool,
 }
 
 fn main() -> Result<()> {
@@ -62,9 +71,6 @@ fn main() -> Result<()> {
     // Load configuration
     let config = load_config(&cli)?;
 
-    // Create linter
-    let linter = Linter::new(config);
-
     // Collect YAML files
     let yaml_files = collect_yaml_files(&cli.paths)?;
 
@@ -74,6 +80,14 @@ fn main() -> Result<()> {
         }
         return Ok(());
     }
+
+    // Handle fix mode
+    if cli.fix || cli.dry_run {
+        return run_fix_mode(&cli, &config, &yaml_files);
+    }
+
+    // Create linter for normal mode
+    let linter = Linter::new(config);
 
     // Parse output format, defaulting to colored if TTY and not explicitly set
     let format: yaml_lint_core::output::OutputFormat =
@@ -131,6 +145,84 @@ fn main() -> Result<()> {
         std::process::exit(1);
     } else if has_warnings && cli.strict {
         std::process::exit(2);
+    }
+
+    Ok(())
+}
+
+/// Run in fix mode
+fn run_fix_mode(cli: &Cli, config: &Config, yaml_files: &[PathBuf]) -> Result<()> {
+    let registry = config.create_registry();
+    let fixer = Fixer::new(&registry);
+
+    let mut total_fixed = 0;
+    let mut files_fixed = 0;
+    let mut files_with_unfixable = 0;
+
+    let is_dry_run = cli.dry_run;
+
+    for file in yaml_files {
+        let content = fs::read_to_string(file)
+            .with_context(|| format!("Failed to read {}", file.display()))?;
+
+        let result = fixer.fix(&file.display().to_string(), &content);
+
+        if result.has_fixes() {
+            files_fixed += 1;
+            total_fixed += result.fixes_applied;
+
+            // Format fix summary for this file
+            let fix_summary: Vec<String> = result
+                .fixes_by_rule
+                .iter()
+                .map(|(rule, count)| format!("{}: {}", rule, count))
+                .collect();
+
+            if is_dry_run {
+                println!(
+                    "{}: would fix {} issue(s) ({})",
+                    file.display(),
+                    result.fixes_applied,
+                    fix_summary.join(", ")
+                );
+            } else {
+                // Write fixed content
+                if let Some(fixed_content) = &result.fixed_content {
+                    fs::write(file, fixed_content)
+                        .with_context(|| format!("Failed to write {}", file.display()))?;
+                }
+
+                println!(
+                    "{}: fixed {} issue(s) ({})",
+                    file.display(),
+                    result.fixes_applied,
+                    fix_summary.join(", ")
+                );
+            }
+        }
+
+        if result.has_unfixable() {
+            files_with_unfixable += 1;
+        }
+    }
+
+    // Print summary
+    println!();
+    if is_dry_run {
+        println!(
+            "Would fix {} issue(s) in {} file(s)",
+            total_fixed, files_fixed
+        );
+    } else {
+        println!("Fixed {} issue(s) in {} file(s)", total_fixed, files_fixed);
+    }
+
+    if files_with_unfixable > 0 {
+        println!(
+            "{} file(s) have unfixable issues (run without --fix to see details)",
+            files_with_unfixable
+        );
+        std::process::exit(1);
     }
 
     Ok(())

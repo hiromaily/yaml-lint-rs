@@ -37,6 +37,30 @@ impl Rule for TrailingSpacesRule {
     fn default_level(&self) -> RuleLevel {
         RuleLevel::Error
     }
+
+    fn is_fixable(&self) -> bool {
+        true
+    }
+
+    fn fix(&self, content: &str, problem: &LintProblem) -> Option<String> {
+        let lines: Vec<&str> = content.lines().collect();
+        let line_idx = problem.line - 1; // Convert to 0-indexed
+
+        if line_idx >= lines.len() {
+            return None;
+        }
+
+        let mut result_lines: Vec<String> = lines.iter().map(|s| s.to_string()).collect();
+        result_lines[line_idx] = lines[line_idx].trim_end().to_string();
+
+        // Preserve original line endings
+        let mut result = result_lines.join("\n");
+        if content.ends_with('\n') {
+            result.push('\n');
+        }
+
+        Some(result)
+    }
 }
 
 #[cfg(test)]

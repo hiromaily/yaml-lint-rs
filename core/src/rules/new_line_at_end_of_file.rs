@@ -43,6 +43,19 @@ impl Rule for NewLineAtEndOfFileRule {
     fn default_level(&self) -> RuleLevel {
         RuleLevel::Error
     }
+
+    fn is_fixable(&self) -> bool {
+        true
+    }
+
+    fn fix(&self, content: &str, _problem: &LintProblem) -> Option<String> {
+        // Simply add a newline at the end if missing
+        if content.is_empty() || content.ends_with('\n') {
+            return None; // Already valid
+        }
+
+        Some(format!("{}\n", content))
+    }
 }
 
 #[cfg(test)]

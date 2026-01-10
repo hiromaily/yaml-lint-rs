@@ -14,6 +14,7 @@ Built with [Claude Code](https://www.anthropic.com/claude-code) and [Cursor](htt
 ## Features
 
 - ✅ Fast and efficient YAML linting
+- ✅ **Auto-fix** support for common issues (`--fix`)
 - ✅ Multiple output formats (standard, colored, parsable)
 - ✅ Configurable rules with preset configurations
 - ✅ Support for `.yamllint` configuration files
@@ -114,6 +115,24 @@ yaml-lint -d default file.yaml
 # Use relaxed preset
 yaml-lint -d relaxed file.yaml
 ```
+
+### Auto-fix
+
+```bash
+# Fix all auto-fixable issues
+yaml-lint --fix file.yaml
+
+# Fix all files in a directory
+yaml-lint --fix src/
+
+# Dry-run: show what would be fixed without making changes
+yaml-lint --dry-run file.yaml
+```
+
+**Fixable Rules:**
+- `trailing-spaces` - Removes trailing whitespace
+- `new-line-at-end-of-file` - Adds missing newline at end of file
+- `empty-lines` - Removes excess blank lines
 
 ### Options
 
