@@ -1,10 +1,24 @@
 //! YAML Linter CLI
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
+use is_terminal::IsTerminal;
+use std::io;
 use std::path::PathBuf;
 use walkdir::WalkDir;
 use yaml_lint_core::{Config, LintLevel, Linter};
+
+/// Color mode for output
+#[derive(Debug, Clone, Copy, ValueEnum, Default)]
+pub enum ColorMode {
+    /// Always use colors
+    Always,
+    /// Never use colors
+    Never,
+    /// Auto-detect based on terminal (default)
+    #[default]
+    Auto,
+}
 
 #[derive(Parser)]
 #[command(name = "yaml-lint")]
@@ -22,6 +36,10 @@ struct Cli {
     #[arg(short = 'f', long, default_value = "standard")]
     format: String,
 
+    /// When to use colors (always, never, auto)
+    #[arg(long, value_enum, default_value = "auto")]
+    color: ColorMode,
+
     /// Return non-zero exit code on warnings
     #[arg(long)]
     strict: bool,
@@ -37,6 +55,9 @@ struct Cli {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    // Configure color output
+    configure_colors(&cli.color);
 
     // Load configuration
     let config = load_config(&cli)?;
@@ -54,11 +75,15 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    // Parse output format
-    let format: yaml_lint_core::output::OutputFormat = cli
-        .format
-        .parse()
-        .map_err(|e| anyhow::anyhow!("Invalid format: {}", e))?;
+    // Parse output format, defaulting to colored if TTY and not explicitly set
+    let format: yaml_lint_core::output::OutputFormat =
+        if cli.format == "standard" && should_use_colors(&cli.color) {
+            yaml_lint_core::output::OutputFormat::Colored
+        } else {
+            cli.format
+                .parse()
+                .map_err(|e| anyhow::anyhow!("Invalid format: {}", e))?
+        };
 
     let formatter = format.formatter();
 
@@ -184,6 +209,22 @@ fn is_yaml_file(path: &std::path::Path) -> bool {
         } else {
             false
         }
+    }
+}
+
+/// Configure color output based on mode and environment
+fn configure_colors(mode: &ColorMode) {
+    colored::control::set_override(should_use_colors(mode));
+}
+
+/// Check if colors should be used based on mode and environment
+fn should_use_colors(mode: &ColorMode) -> bool {
+    let no_color = std::env::var("NO_COLOR").is_ok();
+
+    match mode {
+        ColorMode::Always => true,
+        ColorMode::Never => false,
+        ColorMode::Auto => !no_color && io::stdout().is_terminal(),
     }
 }
 
