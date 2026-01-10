@@ -167,6 +167,28 @@ tag-delete-remote:
 	git push origin --delete "v$(V)"
 	@echo "Deleted remote tag v$(V)"
 
+# Move tag to latest commit (deletes and recreates)
+# Usage: make tag-move V=0.1.0
+.PHONY: tag-move
+tag-move:
+	@if [ -z "$(V)" ]; then echo "Usage: make tag-move V=0.1.0"; exit 1; fi
+	@echo "Moving tag v$(V) to latest commit..."
+	git tag -d "v$(V)" 2>/dev/null || true
+	git push origin --delete "v$(V)" 2>/dev/null || true
+	git tag -a "v$(V)" -m "Release v$(V)"
+	git push origin "v$(V)"
+	@echo "Tag v$(V) moved to: $$(git rev-parse --short HEAD)"
+
+# Move current version tag to latest commit
+.PHONY: tag-move-current
+tag-move-current:
+	@echo "Moving tag v$(VERSION) to latest commit..."
+	git tag -d "v$(VERSION)" 2>/dev/null || true
+	git push origin --delete "v$(VERSION)" 2>/dev/null || true
+	git tag -a "v$(VERSION)" -m "Release v$(VERSION)"
+	git push origin "v$(VERSION)"
+	@echo "Tag v$(VERSION) moved to: $$(git rev-parse --short HEAD)"
+
 # List all tags
 .PHONY: tags
 tags:
