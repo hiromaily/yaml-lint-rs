@@ -8,6 +8,7 @@ pub mod document_start;
 pub mod indentation;
 pub mod key_duplicates;
 pub mod line_length;
+pub mod new_line_at_end_of_file;
 pub mod trailing_spaces;
 
 /// Configuration for a specific rule
@@ -77,6 +78,7 @@ impl RuleRegistry {
         registry.register(Box::new(colons::ColonsRule::new()));
         registry.register(Box::new(key_duplicates::KeyDuplicatesRule));
         registry.register(Box::new(indentation::IndentationRule::new()));
+        registry.register(Box::new(new_line_at_end_of_file::NewLineAtEndOfFileRule));
         registry
     }
 
