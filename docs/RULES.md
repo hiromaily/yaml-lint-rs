@@ -322,6 +322,47 @@ key: value  # Inline comment with proper spacing
 - Section headers (`##`) are allowed
 - Hash inside strings is not treated as a comment
 
+### truthy
+
+**Level**: Warning (default)
+**Configurable**: Yes
+**Fixable**: ❌ No
+
+Restricts boolean representations to avoid YAML 1.1 vs 1.2 ambiguities.
+
+**Configuration**:
+```yaml
+rules:
+  truthy:
+    allowed-values: ['true', 'false']  # Default: only true/false
+    check-keys: false                   # Also check mapping keys (default: false)
+```
+
+**Why it matters**: YAML 1.1 treats `yes`, `no`, `on`, `off`, `y`, `n` as booleans, while YAML 1.2 only treats `true`/`false` as booleans. This causes subtle bugs when switching parsers and is a common source of errors in Kubernetes/Helm configurations.
+
+**Examples**:
+
+```yaml
+# Bad - YAML 1.1 ambiguous values
+debug: yes
+enabled: on
+feature_flag: y
+
+# Good - explicit boolean values
+debug: true
+enabled: true
+feature_flag: true
+
+# Good - quoted strings when you mean strings
+country_code: "NO"  # Norway, not boolean false
+answer: "yes"       # String, not boolean true
+```
+
+**Notes**:
+- Case-insensitive detection (YES, Yes, yes all detected)
+- Quoted values are not flagged (they are strings)
+- Critical for Kubernetes/Helm users
+
 ## Rule Levels
 
 Each rule can be configured with one of three levels:
@@ -350,6 +391,7 @@ Most rules as warnings:
 - `empty-lines`: warning
 - `hyphens`: warning
 - `comments`: warning
+- `truthy`: warning
 - `key-duplicates`: error (kept as error)
 - `document-start`: disabled
 
@@ -358,9 +400,6 @@ More permissive for development and experimentation.
 ## Future Rules (Planned)
 
 The following rules are planned for future releases:
-
-### truthy
-Restrict boolean representations to avoid YAML 1.1 vs 1.2 ambiguities.
 
 ### braces / brackets
 Control spacing in flow collections `{}` and `[]`.

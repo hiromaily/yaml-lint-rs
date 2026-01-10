@@ -221,10 +221,14 @@ ignore: |
     - Level: Error
     - Options: `require-starting-space`, `min-spaces-from-content`
 
+11. **truthy** - Restricts boolean representations (YAML 1.1 vs 1.2)
+    - Level: Warning
+    - Options: `allowed-values`, `check-keys`
+
 ### 📋 Future Rules
 
-Additional 14 rules planned for full yamllint compatibility:
-- truthy, comments, new-lines, empty-values
+Additional rules planned for full yamllint compatibility:
+- new-lines, empty-values
 - braces, brackets, commas
 - comments-indentation, document-end
 - float-values, octal-values, quoted-strings, key-ordering
