@@ -51,6 +51,9 @@ impl Config {
             .rules
             .insert("empty-lines".to_string(), RuleLevel::Error);
         config.rules.insert("hyphens".to_string(), RuleLevel::Error);
+        config
+            .rules
+            .insert("comments".to_string(), RuleLevel::Error);
 
         config
     }
@@ -87,6 +90,9 @@ impl Config {
         config
             .rules
             .insert("hyphens".to_string(), RuleLevel::Warning);
+        config
+            .rules
+            .insert("comments".to_string(), RuleLevel::Warning);
 
         config
     }

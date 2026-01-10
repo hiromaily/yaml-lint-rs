@@ -217,6 +217,10 @@ ignore: |
    - Level: Error
    - Options: `max-spaces-after` (default: 1)
 
+10. **comments** - Enforces consistent comment formatting
+    - Level: Error
+    - Options: `require-starting-space`, `min-spaces-from-content`
+
 ### 📋 Future Rules
 
 Additional 14 rules planned for full yamllint compatibility:

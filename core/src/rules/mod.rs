@@ -4,6 +4,7 @@ use crate::problem::LintProblem;
 use indexmap::IndexMap;
 
 pub mod colons;
+pub mod comments;
 pub mod document_start;
 pub mod empty_lines;
 pub mod hyphens;
@@ -94,6 +95,7 @@ impl RuleRegistry {
         registry.register(Box::new(new_line_at_end_of_file::NewLineAtEndOfFileRule));
         registry.register(Box::new(empty_lines::EmptyLinesRule::new()));
         registry.register(Box::new(hyphens::HyphensRule::new()));
+        registry.register(Box::new(comments::CommentsRule::new()));
         registry
     }
 
