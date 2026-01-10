@@ -1,0 +1,20 @@
+#!/bin/sh
+#
+# Pre-commit hook: Run cargo fmt
+# This hook is managed by cargo-husky
+#
+
+set -e
+
+echo "Running pre-commit hook: cargo fmt --all"
+cargo fmt --all
+
+# Check if there are any changes after formatting
+if ! git diff --quiet; then
+    echo ""
+    echo "⚠️  Some files were formatted. Please review and stage the changes."
+    echo "   Run 'git add -u' to stage the formatted files."
+    exit 1
+fi
+
+echo "✅ Format check passed!"

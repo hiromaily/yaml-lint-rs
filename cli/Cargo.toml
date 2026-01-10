@@ -21,3 +21,6 @@ colored = "2.1"
 anyhow = "1.0"
 walkdir = "2.5"
 ignore = "0.4"
+
+[dev-dependencies]
+cargo-husky.workspace = true

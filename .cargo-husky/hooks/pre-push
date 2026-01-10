@@ -1,0 +1,12 @@
+#!/bin/sh
+#
+# Pre-push hook: Run cargo clippy
+# This hook is managed by cargo-husky
+#
+
+set -e
+
+echo "Running pre-push hook: cargo clippy"
+cargo clippy --all-targets --all-features -- -D warnings
+
+echo "✅ Lint check passed!"
