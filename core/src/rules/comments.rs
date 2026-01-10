@@ -48,25 +48,40 @@ impl CommentsRule {
 
     /// Find the position of a comment in a line, if any
     /// Returns None if no comment found or if # is inside a string
+    ///
+    /// Handles YAML string escaping correctly:
+    /// - Single-quoted strings: '' is an escaped single quote
+    /// - Double-quoted strings: backslash escapes the next character
     fn find_comment_start(line: &str) -> Option<usize> {
         let mut in_single_quote = false;
         let mut in_double_quote = false;
-        let mut prev_char = None;
+        let mut chars = line.char_indices().peekable();
 
-        for (idx, ch) in line.char_indices() {
-            match ch {
-                '\'' if !in_double_quote && prev_char != Some('\\') => {
-                    in_single_quote = !in_single_quote;
+        while let Some((idx, ch)) = chars.next() {
+            if !in_single_quote && !in_double_quote {
+                match ch {
+                    '#' => return Some(idx),
+                    '\'' => in_single_quote = true,
+                    '"' => in_double_quote = true,
+                    _ => {}
                 }
-                '"' if !in_single_quote && prev_char != Some('\\') => {
-                    in_double_quote = !in_double_quote;
+            } else if in_single_quote {
+                if ch == '\'' {
+                    // In YAML, '' is an escaped single quote
+                    if chars.peek().is_some_and(|&(_, next_ch)| next_ch == '\'') {
+                        chars.next(); // Consume the second quote of the pair
+                    } else {
+                        in_single_quote = false;
+                    }
                 }
-                '#' if !in_single_quote && !in_double_quote => {
-                    return Some(idx);
+            } else {
+                // in_double_quote
+                if ch == '\\' {
+                    chars.next(); // Consume whatever character is escaped
+                } else if ch == '"' {
+                    in_double_quote = false;
                 }
-                _ => {}
             }
-            prev_char = Some(ch);
         }
         None
     }
@@ -302,6 +317,45 @@ mod tests {
     #[test]
     fn test_hash_in_single_quote_ignored() {
         let yaml = "key: 'value with # hash'\n";
+        let context = LintContext::new(yaml.to_string());
+        let rule = CommentsRule::new();
+        let problems = rule.check(&context);
+
+        assert!(problems.is_empty());
+    }
+
+    #[test]
+    fn test_hash_after_escaped_single_quote() {
+        // In YAML, '' within single quotes is an escaped single quote
+        let yaml = "key: 'Don''t find a # here'\n";
+        let context = LintContext::new(yaml.to_string());
+        let rule = CommentsRule::new();
+        let problems = rule.check(&context);
+
+        assert!(
+            problems.is_empty(),
+            "Should not find a comment inside a single-quoted string with escaped quotes"
+        );
+    }
+
+    #[test]
+    fn test_hash_after_escaped_double_quote() {
+        // In YAML, \" within double quotes is an escaped double quote
+        let yaml = "key: \"value with \\\" and # here\"\n";
+        let context = LintContext::new(yaml.to_string());
+        let rule = CommentsRule::new();
+        let problems = rule.check(&context);
+
+        assert!(
+            problems.is_empty(),
+            "Should not find a comment inside a double-quoted string with escaped quotes"
+        );
+    }
+
+    #[test]
+    fn test_comment_after_single_quoted_string() {
+        // Comment should be detected after the closing quote
+        let yaml = "key: 'value'  # This is a comment\n";
         let context = LintContext::new(yaml.to_string());
         let rule = CommentsRule::new();
         let problems = rule.check(&context);
