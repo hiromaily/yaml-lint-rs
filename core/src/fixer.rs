@@ -73,25 +73,19 @@ impl<'a> Fixer<'a> {
                 break;
             }
 
-            // Group problems by rule
-            let mut problems_by_rule: HashMap<String, Vec<LintProblem>> = HashMap::new();
-            for problem in problems {
-                problems_by_rule
-                    .entry(problem.rule.clone())
-                    .or_default()
-                    .push(problem);
-            }
-
-            // Try to fix problems from each rule
-            for (rule_name, rule_problems) in &problems_by_rule {
-                if let Some(rule) = self.registry.get(rule_name)
+            // Try to fix problems in order (sorted by line number)
+            // This applies fixes top-to-bottom and avoids HashMap overhead
+            for problem in &problems {
+                if let Some(rule) = self.registry.get(&problem.rule)
                     && rule.is_fixable()
-                    && let Some(problem) = rule_problems.first()
                     && let Some(fixed) = rule.fix(&current_content, problem)
                 {
                     current_content = fixed;
                     result.fixes_applied += 1;
-                    *result.fixes_by_rule.entry(rule_name.clone()).or_insert(0) += 1;
+                    *result
+                        .fixes_by_rule
+                        .entry(problem.rule.clone())
+                        .or_insert(0) += 1;
                     made_progress = true;
                     break; // Re-check all problems after each fix
                 }

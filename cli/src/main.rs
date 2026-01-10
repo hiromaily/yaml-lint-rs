@@ -178,26 +178,19 @@ fn run_fix_mode(cli: &Cli, config: &Config, yaml_files: &[PathBuf]) -> Result<()
                 .map(|(rule, count)| format!("{}: {}", rule, count))
                 .collect();
 
-            if is_dry_run {
-                println!(
-                    "{}: would fix {} issue(s) ({})",
-                    file.display(),
-                    result.fixes_applied,
-                    fix_summary.join(", ")
-                );
-            } else {
-                // Write fixed content
-                if let Some(fixed_content) = &result.fixed_content {
-                    fs::write(file, fixed_content)
-                        .with_context(|| format!("Failed to write {}", file.display()))?;
-                }
+            let action = if is_dry_run { "would fix" } else { "fixed" };
+            println!(
+                "{}: {} {} issue(s) ({})",
+                file.display(),
+                action,
+                result.fixes_applied,
+                fix_summary.join(", ")
+            );
 
-                println!(
-                    "{}: fixed {} issue(s) ({})",
-                    file.display(),
-                    result.fixes_applied,
-                    fix_summary.join(", ")
-                );
+            // Write fixed content (only in non-dry-run mode)
+            if !is_dry_run && let Some(fixed_content) = &result.fixed_content {
+                fs::write(file, fixed_content)
+                    .with_context(|| format!("Failed to write {}", file.display()))?;
             }
         }
 
@@ -208,14 +201,11 @@ fn run_fix_mode(cli: &Cli, config: &Config, yaml_files: &[PathBuf]) -> Result<()
 
     // Print summary
     println!();
-    if is_dry_run {
-        println!(
-            "Would fix {} issue(s) in {} file(s)",
-            total_fixed, files_fixed
-        );
-    } else {
-        println!("Fixed {} issue(s) in {} file(s)", total_fixed, files_fixed);
-    }
+    let summary_action = if is_dry_run { "Would fix" } else { "Fixed" };
+    println!(
+        "{} {} issue(s) in {} file(s)",
+        summary_action, total_fixed, files_fixed
+    );
 
     if files_with_unfixable > 0 {
         println!(

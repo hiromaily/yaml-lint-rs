@@ -42,19 +42,22 @@ impl Rule for TrailingSpacesRule {
         true
     }
 
-    fn fix(&self, content: &str, problem: &LintProblem) -> Option<String> {
-        let lines: Vec<&str> = content.lines().collect();
-        let line_idx = problem.line - 1; // Convert to 0-indexed
-
-        if line_idx >= lines.len() {
+    fn fix(&self, content: &str, _problem: &LintProblem) -> Option<String> {
+        // Check if there's anything to fix to avoid unnecessary string allocation
+        if !content
+            .lines()
+            .any(|line| line.ends_with(' ') || line.ends_with('\t'))
+        {
             return None;
         }
 
-        let mut result_lines: Vec<String> = lines.iter().map(|s| s.to_string()).collect();
-        result_lines[line_idx] = lines[line_idx].trim_end().to_string();
+        let mut result = content
+            .lines()
+            .map(|line| line.trim_end())
+            .collect::<Vec<_>>()
+            .join("\n");
 
-        // Preserve original line endings
-        let mut result = result_lines.join("\n");
+        // Preserve original trailing newline if it existed
         if content.ends_with('\n') {
             result.push('\n');
         }
