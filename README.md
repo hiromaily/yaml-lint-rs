@@ -194,11 +194,15 @@ ignore: |
    - Level: Error
    - Options: `max` (default: 2), `max-start` (0), `max-end` (0)
 
+9. **hyphens** - Controls spacing after list item hyphens
+   - Level: Error
+   - Options: `max-spaces-after` (default: 1)
+
 ### 📋 Future Rules
 
-Additional 15 rules planned for full yamllint compatibility:
-- truthy, hyphens, comments, new-lines
-- braces, brackets, commas, empty-values
+Additional 14 rules planned for full yamllint compatibility:
+- truthy, comments, new-lines, empty-values
+- braces, brackets, commas
 - comments-indentation, document-end
 - float-values, octal-values, quoted-strings, key-ordering
 

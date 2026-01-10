@@ -16,7 +16,7 @@ jobs:
   # ===========================================================================
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v6
 
@@ -51,7 +51,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-slim, macos-latest]
 
     steps:
       - uses: actions/checkout@v6
@@ -86,7 +86,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-slim, macos-latest]
 
     steps:
       - uses: actions/checkout@v6
@@ -127,7 +127,7 @@ jobs:
   # ===========================================================================
   check:
     name: Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v6
 
@@ -153,7 +153,7 @@ jobs:
   # ===========================================================================
   msrv:
     name: MSRV (1.85)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v6
 
