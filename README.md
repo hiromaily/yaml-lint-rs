@@ -145,13 +145,11 @@ ignore: |
 
 ## Implemented Rules
 
-### ✅ Phase 1 (Current)
+### ✅ Phase 1 (Complete)
 
 1. **trailing-spaces** - Detects whitespace at line endings
    - Level: Error
    - No configuration
-
-### 🚧 Phase 1 (In Progress)
 
 2. **line-length** - Enforces maximum line length
    - Level: Error
@@ -173,11 +171,15 @@ ignore: |
    - Level: Error
    - Options: `spaces` (2/4/consistent), `indent-sequences`
 
+7. **new-line-at-end-of-file** - Requires newline at end of file
+   - Level: Error
+   - POSIX standard compliance
+
 ### 📋 Future Rules
 
-Additional 17 rules planned for full yamllint compatibility:
-- truthy, hyphens, comments, new-line-at-end-of-file
-- braces, brackets, commas, empty-lines, new-lines
+Additional 16 rules planned for full yamllint compatibility:
+- truthy, hyphens, comments, empty-lines
+- braces, brackets, commas, new-lines
 - comments-indentation, document-end, empty-values
 - float-values, octal-values, quoted-strings, key-ordering
 

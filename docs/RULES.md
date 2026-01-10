@@ -185,6 +185,30 @@ list:
   - item3
 ```
 
+### new-line-at-end-of-file
+
+**Level**: Error (default)
+**Configurable**: No
+
+Requires files to end with a newline character.
+
+**Why it matters**: POSIX standard requires text files to end with a newline. This also prevents unnecessary diffs in version control when adding content to file end.
+
+**Examples**:
+
+```yaml
+# Bad - file ends without newline
+key: value
+```
+
+```yaml
+# Good - file ends with newline
+key: value
+⏎
+```
+
+**Note**: Empty files are considered valid.
+
 ## Rule Levels
 
 Each rule can be configured with one of three levels:
@@ -209,6 +233,7 @@ Most rules as warnings:
 - `line-length`: warning
 - `colons`: warning
 - `indentation`: warning
+- `new-line-at-end-of-file`: warning
 - `key-duplicates`: error (kept as error)
 - `document-start`: disabled
 
@@ -226,9 +251,6 @@ Control spacing after list item hyphens.
 
 ### comments
 Enforce comment formatting and spacing.
-
-### new-line-at-end-of-file
-Require a newline at the end of files (POSIX standard).
 
 ### braces / brackets
 Control spacing in flow collections `{}` and `[]`.
