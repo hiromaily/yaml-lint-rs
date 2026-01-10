@@ -35,6 +35,12 @@ yaml-lint-rs is significantly faster than Python yamllint:
 
 ## Installation
 
+### From crates.io (Recommended)
+
+```bash
+cargo install yaml-lint
+```
+
 ### Homebrew (macOS/Linux)
 
 ```bash
@@ -47,19 +53,10 @@ brew install yaml-lint
 Requires Rust 1.85+ (install from [rustup.rs](https://rustup.rs/)):
 
 ```bash
-# Clone or navigate to the project directory
+git clone https://github.com/hiromaily/yaml-lint-rs.git
 cd yaml-lint-rs
-
-# Build the project
 cargo build --release
-
 # The binary will be at ./target/release/yaml-lint
-```
-
-### Install globally via Cargo
-
-```bash
-cargo install --path cli
 ```
 
 ## Usage
