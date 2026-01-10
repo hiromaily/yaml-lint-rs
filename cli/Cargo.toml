@@ -5,7 +5,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "A fast YAML linter written in Rust"
+description = "A fast YAML linter written in Rust - 20-60x faster than Python yamllint"
+readme = "../README.md"
+keywords = ["yaml", "linter", "lint", "cli", "devtools"]
+categories = ["development-tools", "command-line-utilities"]
 
 [[bin]]
 name = "yaml-lint"

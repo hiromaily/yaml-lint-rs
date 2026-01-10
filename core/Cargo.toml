@@ -5,7 +5,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Core YAML linting engine"
+description = "Core YAML linting engine - fast, configurable YAML linter inspired by yamllint"
+readme = "../README.md"
+keywords = ["yaml", "linter", "lint", "validation", "config"]
+categories = ["development-tools", "command-line-utilities", "config"]
 
 [dependencies]
 yaml-rust2 = { workspace = true }
