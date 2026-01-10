@@ -38,16 +38,16 @@ impl TruthyRule {
 
     /// Check if a value is a YAML 1.1 truthy value
     fn is_truthy_value(value: &str) -> bool {
-        let lower = value.to_lowercase();
-        YAML_11_TRUTHY_VALUES.contains(&lower.as_str())
+        YAML_11_TRUTHY_VALUES
+            .iter()
+            .any(|&v| v.eq_ignore_ascii_case(value))
     }
 
     /// Check if a value is in the allowed list
     fn is_allowed(&self, value: &str) -> bool {
-        let lower = value.to_lowercase();
         self.allowed_values
             .iter()
-            .any(|allowed| allowed.to_lowercase() == lower)
+            .any(|allowed| allowed.eq_ignore_ascii_case(value))
     }
 
     /// Check if a value is quoted (starts and ends with quotes)
@@ -107,22 +107,24 @@ impl TruthyRule {
         Some((key, value, value_start))
     }
 
-    /// Find the colon that separates key from value (not inside quotes)
-    fn find_key_value_separator(line: &str) -> Option<usize> {
+    /// Find the position of a character outside of quoted strings
+    /// Returns the index of the first occurrence of `target` that is not inside quotes
+    fn find_char_outside_quotes(s: &str, target: char) -> Option<usize> {
         let mut in_single_quote = false;
         let mut in_double_quote = false;
-        let mut chars = line.char_indices().peekable();
+        let mut chars = s.char_indices().peekable();
 
         while let Some((idx, ch)) = chars.next() {
             if !in_single_quote && !in_double_quote {
                 match ch {
-                    ':' => return Some(idx),
+                    c if c == target => return Some(idx),
                     '\'' => in_single_quote = true,
                     '"' => in_double_quote = true,
                     _ => {}
                 }
             } else if in_single_quote {
                 if ch == '\'' {
+                    // Handle escaped single quote ''
                     if chars.peek().is_some_and(|&(_, next_ch)| next_ch == '\'') {
                         chars.next();
                     } else {
@@ -130,6 +132,7 @@ impl TruthyRule {
                     }
                 }
             } else if ch == '\\' {
+                // Handle backslash escape in double-quoted strings
                 chars.next();
             } else if ch == '"' {
                 in_double_quote = false;
@@ -138,35 +141,17 @@ impl TruthyRule {
         None
     }
 
+    /// Find the colon that separates key from value (not inside quotes)
+    fn find_key_value_separator(line: &str) -> Option<usize> {
+        Self::find_char_outside_quotes(line, ':')
+    }
+
     /// Strip inline comment from value
     fn strip_inline_comment(value: &str) -> &str {
-        let mut in_single_quote = false;
-        let mut in_double_quote = false;
-        let mut chars = value.char_indices().peekable();
-
-        while let Some((idx, ch)) = chars.next() {
-            if !in_single_quote && !in_double_quote {
-                match ch {
-                    '#' => return value[..idx].trim(),
-                    '\'' => in_single_quote = true,
-                    '"' => in_double_quote = true,
-                    _ => {}
-                }
-            } else if in_single_quote {
-                if ch == '\'' {
-                    if chars.peek().is_some_and(|&(_, next_ch)| next_ch == '\'') {
-                        chars.next();
-                    } else {
-                        in_single_quote = false;
-                    }
-                }
-            } else if ch == '\\' {
-                chars.next();
-            } else if ch == '"' {
-                in_double_quote = false;
-            }
+        match Self::find_char_outside_quotes(value, '#') {
+            Some(idx) => value[..idx].trim(),
+            None => value,
         }
-        value
     }
 }
 
