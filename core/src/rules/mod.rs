@@ -13,6 +13,7 @@ pub mod key_duplicates;
 pub mod line_length;
 pub mod new_line_at_end_of_file;
 pub mod trailing_spaces;
+pub mod truthy;
 
 /// Configuration for a specific rule
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,6 +97,7 @@ impl RuleRegistry {
         registry.register(Box::new(empty_lines::EmptyLinesRule::new()));
         registry.register(Box::new(hyphens::HyphensRule::new()));
         registry.register(Box::new(comments::CommentsRule::new()));
+        registry.register(Box::new(truthy::TruthyRule::new()));
         registry
     }
 

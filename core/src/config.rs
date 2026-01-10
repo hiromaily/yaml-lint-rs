@@ -54,6 +54,9 @@ impl Config {
         config
             .rules
             .insert("comments".to_string(), RuleLevel::Error);
+        config
+            .rules
+            .insert("truthy".to_string(), RuleLevel::Warning);
 
         config
     }
@@ -93,6 +96,9 @@ impl Config {
         config
             .rules
             .insert("comments".to_string(), RuleLevel::Warning);
+        config
+            .rules
+            .insert("truthy".to_string(), RuleLevel::Warning);
 
         config
     }
