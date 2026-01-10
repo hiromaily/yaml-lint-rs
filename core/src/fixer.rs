@@ -56,6 +56,7 @@ impl<'a> Fixer<'a> {
 
     /// Fix all fixable problems in the given content
     /// Returns the fix result including the fixed content
+    #[allow(clippy::collapsible_if)] // Nested ifs required for MSRV 1.85 compatibility (let chains unstable)
     pub fn fix(&self, path: &str, content: &str) -> FixResult {
         let mut result = FixResult::new(path.to_string());
         let mut current_content = content.to_string();
@@ -76,18 +77,19 @@ impl<'a> Fixer<'a> {
             // Try to fix problems in order (sorted by line number)
             // This applies fixes top-to-bottom and avoids HashMap overhead
             for problem in &problems {
-                if let Some(rule) = self.registry.get(&problem.rule)
-                    && rule.is_fixable()
-                    && let Some(fixed) = rule.fix(&current_content, problem)
-                {
-                    current_content = fixed;
-                    result.fixes_applied += 1;
-                    *result
-                        .fixes_by_rule
-                        .entry(problem.rule.clone())
-                        .or_insert(0) += 1;
-                    made_progress = true;
-                    break; // Re-check all problems after each fix
+                if let Some(rule) = self.registry.get(&problem.rule) {
+                    if rule.is_fixable() {
+                        if let Some(fixed) = rule.fix(&current_content, problem) {
+                            current_content = fixed;
+                            result.fixes_applied += 1;
+                            *result
+                                .fixes_by_rule
+                                .entry(problem.rule.clone())
+                                .or_insert(0) += 1;
+                            made_progress = true;
+                            break; // Re-check all problems after each fix
+                        }
+                    }
                 }
             }
         }
@@ -96,10 +98,10 @@ impl<'a> Fixer<'a> {
         let context = LintContext::new(current_content.clone());
         let remaining_problems = self.registry.check_all(&context);
         for problem in remaining_problems {
-            if let Some(rule) = self.registry.get(&problem.rule)
-                && !rule.is_fixable()
-            {
-                result.unfixable_problems.push(problem);
+            if let Some(rule) = self.registry.get(&problem.rule) {
+                if !rule.is_fixable() {
+                    result.unfixable_problems.push(problem);
+                }
             }
         }
 

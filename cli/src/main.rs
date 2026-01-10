@@ -151,6 +151,7 @@ fn main() -> Result<()> {
 }
 
 /// Run in fix mode
+#[allow(clippy::collapsible_if)] // Nested ifs required for MSRV 1.85 compatibility
 fn run_fix_mode(cli: &Cli, config: &Config, yaml_files: &[PathBuf]) -> Result<()> {
     let registry = config.create_registry();
     let fixer = Fixer::new(&registry);
@@ -188,9 +189,11 @@ fn run_fix_mode(cli: &Cli, config: &Config, yaml_files: &[PathBuf]) -> Result<()
             );
 
             // Write fixed content (only in non-dry-run mode)
-            if !is_dry_run && let Some(fixed_content) = &result.fixed_content {
-                fs::write(file, fixed_content)
-                    .with_context(|| format!("Failed to write {}", file.display()))?;
+            if !is_dry_run {
+                if let Some(fixed_content) = &result.fixed_content {
+                    fs::write(file, fixed_content)
+                        .with_context(|| format!("Failed to write {}", file.display()))?;
+                }
             }
         }
 
