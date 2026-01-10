@@ -83,6 +83,11 @@ impl Rule for EmptyLinesRule {
             ));
         }
 
+        // If entire file is empty lines, don't report as end-of-file error too
+        if start_empty_count == context.lines.len() {
+            return problems;
+        }
+
         // Check empty lines at end of file
         let mut end_empty_count = 0;
         for line in context.lines.iter().rev() {
@@ -119,11 +124,10 @@ impl Rule for EmptyLinesRule {
                 consecutive_empty += 1;
             } else {
                 if consecutive_empty > self.max {
-                    // Don't report if this is the start or end of file (already reported)
+                    // Don't report if this is the start of file (already reported)
                     let is_at_start = empty_block_start == 1;
-                    let is_at_end = idx == context.lines.len();
 
-                    if !is_at_start && !is_at_end {
+                    if !is_at_start {
                         problems.push(LintProblem::new(
                             empty_block_start,
                             1,
@@ -278,5 +282,18 @@ mod tests {
 
         // Should report: start (1 > 0), middle (3 > 2), end (1 > 0)
         assert_eq!(problems.len(), 3);
+    }
+
+    #[test]
+    fn test_all_empty_lines_file() {
+        // File with only empty lines should only report start error, not both start and end
+        let yaml = "\n\n\n";
+        let context = LintContext::new(yaml.to_string());
+        let rule = EmptyLinesRule::new();
+        let problems = rule.check(&context);
+
+        // Should only report start error (3 > 0), not end error too
+        assert_eq!(problems.len(), 1);
+        assert!(problems[0].message.contains("at start of file"));
     }
 }
