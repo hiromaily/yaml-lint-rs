@@ -80,15 +80,30 @@ yaml-lint -c .yamllint file.yaml
 ### Output formats
 
 ```bash
-# Standard human-readable output (default)
+# Standard human-readable output (default in non-TTY)
 yaml-lint file.yaml
 
-# Colored output (coming soon)
+# Colored output (default in TTY)
 yaml-lint -f colored file.yaml
 
-# Machine-parsable output (coming soon)
+# Machine-parsable output
 yaml-lint -f parsable file.yaml
 ```
+
+### Color control
+
+```bash
+# Auto-detect based on terminal (default)
+yaml-lint --color auto file.yaml
+
+# Always use colors
+yaml-lint --color always file.yaml
+
+# Never use colors
+yaml-lint --color never file.yaml
+```
+
+Colors are automatically enabled when output is to a terminal. The `NO_COLOR` environment variable is respected (see https://no-color.org/).
 
 ### Presets
 
