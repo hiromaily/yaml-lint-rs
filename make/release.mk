@@ -13,6 +13,24 @@ TARGETS := x86_64-apple-darwin aarch64-apple-darwin x86_64-unknown-linux-gnu aar
 
 # ==============================================================================
 # Version Management
+#
+# 1. Set the new version
+# ```
+# make set-version V=0.2.0
+# ```
+#
+# 2. Update CHANGELOG.md (move [Unreleased] items to new version section)
+#
+# 3. Commit the changes
+# ```
+# git add -A && git commit -m "Prepare release v0.2.0"
+# ```
+#
+# 4. Create and push tag (triggers CI release & Homebrew update)
+# ```
+# make tag
+# make tag-push
+# ```
 # ==============================================================================
 
 # Show current version
