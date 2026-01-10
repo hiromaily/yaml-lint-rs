@@ -286,6 +286,42 @@ list:
 
 **Note**: Empty list items (`-` alone) and block scalar indicators (`- |`, `- >`) are allowed.
 
+### comments
+
+**Level**: Error (default)
+**Configurable**: Yes
+**Fixable**: ✅ Yes
+
+Enforces consistent comment formatting in YAML files.
+
+**Configuration**:
+```yaml
+rules:
+  comments:
+    require-starting-space: true    # Require space after # (default: true)
+    ignore-shebangs: true           # Ignore shebang lines (default: true)
+    min-spaces-from-content: 2      # Minimum spaces before inline comment (default: 2)
+```
+
+**Why it matters**: Consistent comment formatting improves readability.
+
+**Examples**:
+
+```yaml
+# Bad
+#This comment has no space after #
+key: value# Inline comment too close
+
+# Good
+# This comment has proper spacing
+key: value  # Inline comment with proper spacing
+```
+
+**Notes**:
+- Shebangs (`#!/bin/bash`) are ignored by default
+- Section headers (`##`) are allowed
+- Hash inside strings is not treated as a comment
+
 ## Rule Levels
 
 Each rule can be configured with one of three levels:
@@ -313,6 +349,7 @@ Most rules as warnings:
 - `new-line-at-end-of-file`: warning
 - `empty-lines`: warning
 - `hyphens`: warning
+- `comments`: warning
 - `key-duplicates`: error (kept as error)
 - `document-start`: disabled
 
@@ -324,9 +361,6 @@ The following rules are planned for future releases:
 
 ### truthy
 Restrict boolean representations to avoid YAML 1.1 vs 1.2 ambiguities.
-
-### comments
-Enforce comment formatting and spacing.
 
 ### braces / brackets
 Control spacing in flow collections `{}` and `[]`.
