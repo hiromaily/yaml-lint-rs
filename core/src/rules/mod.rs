@@ -5,6 +5,7 @@ use indexmap::IndexMap;
 
 pub mod colons;
 pub mod document_start;
+pub mod empty_lines;
 pub mod indentation;
 pub mod key_duplicates;
 pub mod line_length;
@@ -79,6 +80,7 @@ impl RuleRegistry {
         registry.register(Box::new(key_duplicates::KeyDuplicatesRule));
         registry.register(Box::new(indentation::IndentationRule::new()));
         registry.register(Box::new(new_line_at_end_of_file::NewLineAtEndOfFileRule));
+        registry.register(Box::new(empty_lines::EmptyLinesRule::new()));
         registry
     }
 

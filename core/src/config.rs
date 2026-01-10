@@ -47,6 +47,9 @@ impl Config {
         config
             .rules
             .insert("new-line-at-end-of-file".to_string(), RuleLevel::Error);
+        config
+            .rules
+            .insert("empty-lines".to_string(), RuleLevel::Error);
 
         config
     }
@@ -77,6 +80,9 @@ impl Config {
         config
             .rules
             .insert("new-line-at-end-of-file".to_string(), RuleLevel::Warning);
+        config
+            .rules
+            .insert("empty-lines".to_string(), RuleLevel::Warning);
 
         config
     }
