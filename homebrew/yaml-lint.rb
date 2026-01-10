@@ -6,7 +6,7 @@
 class YamlLint < Formula
   desc "A fast YAML linter written in Rust"
   homepage "https://github.com/hiromaily/yaml-lint-rs"
-  version "0.1.0"
+  version "0.2.0"
   license "MIT"
 
   on_macos do
