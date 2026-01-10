@@ -2,15 +2,15 @@
 # Test targets
 # ==============================================================================
 
-# Run all tests
+# Run all tests (same as CI)
 .PHONY: test
 test:
-	cargo test
+	cargo test --all
 
 # Run tests with output
 .PHONY: test-verbose
 test-verbose:
-	cargo test -- --nocapture
+	cargo test --all -- --nocapture
 
 # Run specific test
 # Usage: make test-one TEST=test_name

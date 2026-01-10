@@ -25,14 +25,29 @@ yaml-lint-rs/
 └── tests/                # Integration tests
 ```
 
-## Key Commands
+## Key Commands (Makefile)
 
+### CI Commands (run before commit)
 ```bash
-cargo build --release     # Build release binary
-cargo test --all          # Run all tests
-cargo clippy --all        # Lint code
-cargo fmt --all           # Format code
-make help                 # Show available make targets
+make ci          # Run all CI checks (fmt-check + lint + test)
+make fmt-check   # Check formatting (same as CI)
+make lint        # Run clippy (same as CI)
+make test        # Run all tests (same as CI)
+```
+
+### Development
+```bash
+make build       # Build debug version
+make release     # Build release version
+make fmt         # Format code
+make clean       # Clean build artifacts
+make help        # Show all available targets
+```
+
+### Fixture Validation
+```bash
+make validate-fixtures        # Validate test fixtures
+make validate-fixtures-detail # Detailed validation
 ```
 
 ## Adding New Rules

@@ -11,10 +11,29 @@
 3. Register in `mod.rs`
 4. Add to config presets
 
-## Commands
-- `cargo test --all` - run tests
-- `cargo clippy --all` - lint
-- `make help` - show targets
+## Commands (Makefile)
+
+### CI Commands (run before commit)
+```bash
+make ci          # Run all CI checks (fmt-check + lint + test)
+make fmt-check   # Check formatting
+make lint        # Run clippy
+make test        # Run all tests
+```
+
+### Development
+```bash
+make build       # Build debug
+make release     # Build release
+make fmt         # Format code
+make watch       # Watch and test
+```
+
+### Fixture Validation
+```bash
+make validate-fixtures        # Validate test fixtures
+make validate-fixtures-detail # Detailed validation
+```
 
 ## Dependencies
 - `yaml-rust2` for YAML parsing

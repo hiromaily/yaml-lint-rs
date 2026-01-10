@@ -20,21 +20,16 @@ check:
 # Format code
 .PHONY: fmt
 fmt:
-	cargo fmt
+	cargo fmt --all
 
-# Check formatting without changes
+# Check formatting without changes (same as CI)
 .PHONY: fmt-check
 fmt-check:
-	cargo fmt --check
+	cargo fmt --all -- --check
 
-# Run clippy linter
+# Run clippy linter (same as CI)
 .PHONY: lint
 lint:
-	cargo clippy -- -D warnings
-
-# Run clippy with all targets
-.PHONY: lint-all
-lint-all:
 	cargo clippy --all-targets --all-features -- -D warnings
 
 # Clean build artifacts
