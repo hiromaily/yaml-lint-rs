@@ -245,6 +245,38 @@ key2: value2  # 1 empty line - ok
 
 **Note**: Lines containing only whitespace are considered empty.
 
+### hyphens
+
+**Level**: Error (default)
+**Configurable**: Yes
+
+Controls spacing after list item hyphens in YAML sequences.
+
+**Configuration**:
+```yaml
+rules:
+  hyphens:
+    max-spaces-after: 1  # Maximum spaces after hyphen (default: 1)
+```
+
+**Why it matters**: Consistent list formatting improves readability.
+
+**Examples**:
+
+```yaml
+# Bad (with max-spaces-after: 1)
+list:
+  -  item1   # 2 spaces after hyphen
+  -   item2  # 3 spaces after hyphen
+
+# Good
+list:
+  - item1    # 1 space after hyphen
+  - item2
+```
+
+**Note**: Empty list items (`-` alone) and block scalar indicators (`- |`, `- >`) are allowed.
+
 ## Rule Levels
 
 Each rule can be configured with one of three levels:
@@ -271,6 +303,7 @@ Most rules as warnings:
 - `indentation`: warning
 - `new-line-at-end-of-file`: warning
 - `empty-lines`: warning
+- `hyphens`: warning
 - `key-duplicates`: error (kept as error)
 - `document-start`: disabled
 
@@ -282,9 +315,6 @@ The following rules are planned for future releases:
 
 ### truthy
 Restrict boolean representations to avoid YAML 1.1 vs 1.2 ambiguities.
-
-### hyphens
-Control spacing after list item hyphens.
 
 ### comments
 Enforce comment formatting and spacing.
