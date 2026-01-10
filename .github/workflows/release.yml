@@ -115,10 +115,119 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
-      - name: Update Homebrew formula
-        uses: dawidd6/action-homebrew-bump-formula@v7
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v6
         with:
+          repository: hiromaily/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          tap: hiromaily/tap
-          formula: yaml-lint
-          tag: ${{ github.ref_name }}
+          path: homebrew-tap
+
+      - name: Download release assets and calculate checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          # Remove 'v' prefix for version number
+          VERSION_NUM="${VERSION#v}"
+          
+          # Download all release assets
+          mkdir -p assets
+          cd assets
+          
+          for target in x86_64-apple-darwin aarch64-apple-darwin x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
+            echo "Downloading yaml-lint-${target}.tar.gz..."
+            gh release download "${VERSION}" \
+              --repo hiromaily/yaml-lint-rs \
+              --pattern "yaml-lint-${target}.tar.gz" || echo "Failed to download ${target}"
+          done
+          
+          # Calculate SHA256 checksums
+          echo "Calculating checksums..."
+          SHA256_X86_64_DARWIN=$(sha256sum yaml-lint-x86_64-apple-darwin.tar.gz | cut -d' ' -f1)
+          SHA256_AARCH64_DARWIN=$(sha256sum yaml-lint-aarch64-apple-darwin.tar.gz | cut -d' ' -f1)
+          SHA256_X86_64_LINUX=$(sha256sum yaml-lint-x86_64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
+          SHA256_AARCH64_LINUX=$(sha256sum yaml-lint-aarch64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
+          
+          echo "SHA256_X86_64_DARWIN=${SHA256_X86_64_DARWIN}" >> $GITHUB_ENV
+          echo "SHA256_AARCH64_DARWIN=${SHA256_AARCH64_DARWIN}" >> $GITHUB_ENV
+          echo "SHA256_X86_64_LINUX=${SHA256_X86_64_LINUX}" >> $GITHUB_ENV
+          echo "SHA256_AARCH64_LINUX=${SHA256_AARCH64_LINUX}" >> $GITHUB_ENV
+          echo "VERSION_NUM=${VERSION_NUM}" >> $GITHUB_ENV
+
+      - name: Update formula
+        run: |
+          cd homebrew-tap
+          
+          cat > Formula/yaml-lint.rb << 'FORMULA_EOF'
+          # typed: false
+          # frozen_string_literal: true
+          
+          # Homebrew formula for yaml-lint
+          # Repository: https://github.com/hiromaily/homebrew-tap
+          class YamlLint < Formula
+            desc "A fast YAML linter written in Rust"
+            homepage "https://github.com/hiromaily/yaml-lint-rs"
+            version "VERSION_PLACEHOLDER"
+            license "MIT"
+          
+            on_macos do
+              on_intel do
+                url "https://github.com/hiromaily/yaml-lint-rs/releases/download/v#{version}/yaml-lint-x86_64-apple-darwin.tar.gz"
+                sha256 "SHA256_X86_64_DARWIN_PLACEHOLDER"
+              end
+          
+              on_arm do
+                url "https://github.com/hiromaily/yaml-lint-rs/releases/download/v#{version}/yaml-lint-aarch64-apple-darwin.tar.gz"
+                sha256 "SHA256_AARCH64_DARWIN_PLACEHOLDER"
+              end
+            end
+          
+            on_linux do
+              on_intel do
+                url "https://github.com/hiromaily/yaml-lint-rs/releases/download/v#{version}/yaml-lint-x86_64-unknown-linux-gnu.tar.gz"
+                sha256 "SHA256_X86_64_LINUX_PLACEHOLDER"
+              end
+          
+              on_arm do
+                url "https://github.com/hiromaily/yaml-lint-rs/releases/download/v#{version}/yaml-lint-aarch64-unknown-linux-gnu.tar.gz"
+                sha256 "SHA256_AARCH64_LINUX_PLACEHOLDER"
+              end
+            end
+          
+            def install
+              bin.install "yaml-lint"
+            end
+          
+            test do
+              # Create a test YAML file
+              (testpath/"test.yaml").write <<~EOS
+                key: value
+                list:
+                  - item1
+                  - item2
+              EOS
+          
+              # Run yaml-lint and check it exits successfully
+              system "#{bin}/yaml-lint", testpath/"test.yaml"
+            end
+          end
+          FORMULA_EOF
+          
+          # Replace placeholders with actual values
+          sed -i "s/VERSION_PLACEHOLDER/${VERSION_NUM}/g" Formula/yaml-lint.rb
+          sed -i "s/SHA256_X86_64_DARWIN_PLACEHOLDER/${SHA256_X86_64_DARWIN}/g" Formula/yaml-lint.rb
+          sed -i "s/SHA256_AARCH64_DARWIN_PLACEHOLDER/${SHA256_AARCH64_DARWIN}/g" Formula/yaml-lint.rb
+          sed -i "s/SHA256_X86_64_LINUX_PLACEHOLDER/${SHA256_X86_64_LINUX}/g" Formula/yaml-lint.rb
+          sed -i "s/SHA256_AARCH64_LINUX_PLACEHOLDER/${SHA256_AARCH64_LINUX}/g" Formula/yaml-lint.rb
+          
+          echo "Updated formula:"
+          cat Formula/yaml-lint.rb
+
+      - name: Commit and push
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/yaml-lint.rb
+          git commit -m "Update yaml-lint to ${VERSION_NUM}"
+          git push
