@@ -44,10 +44,7 @@ impl Rule for LineLengthRule {
                 problems.push(LintProblem::new(
                     line_idx + 1, // 1-indexed
                     self.max + 1, // Column where it exceeds
-                    format!(
-                        "line too long ({} > {} characters)",
-                        line_length, self.max
-                    ),
+                    format!("line too long ({} > {} characters)", line_length, self.max),
                     self.name(),
                     LintLevel::Error,
                 ));
@@ -79,7 +76,8 @@ mod tests {
     #[test]
     fn test_line_exceeds_limit() {
         // Create a line with 81 characters (exceeds default 80)
-        let long_line = "key: ".to_string() + &"x".repeat(77); // 4 + 77 = 81
+        // "key: " = 5 chars, so we need 76 more to get 81
+        let long_line = "key: ".to_string() + &"x".repeat(76); // 5 + 76 = 81
         let yaml = format!("{}\n", long_line);
         let context = LintContext::new(yaml);
         let rule = LineLengthRule::new();

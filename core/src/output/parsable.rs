@@ -62,7 +62,13 @@ mod tests {
     fn test_format_multiple_problems() {
         let formatter = ParsableFormatter;
         let problems = vec![
-            LintProblem::new(1, 10, "trailing spaces", "trailing-spaces", LintLevel::Error),
+            LintProblem::new(
+                1,
+                10,
+                "trailing spaces",
+                "trailing-spaces",
+                LintLevel::Error,
+            ),
             LintProblem::new(5, 1, "line too long", "line-length", LintLevel::Warning),
         ];
 

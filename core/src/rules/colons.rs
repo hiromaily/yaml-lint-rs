@@ -52,7 +52,8 @@ impl Rule for ColonsRule {
             }
 
             // Skip document markers and directives
-            if trimmed.starts_with("---") || trimmed.starts_with("...") || trimmed.starts_with('%') {
+            if trimmed.starts_with("---") || trimmed.starts_with("...") || trimmed.starts_with('%')
+            {
                 continue;
             }
 
@@ -62,7 +63,7 @@ impl Rule for ColonsRule {
             let mut in_double_quote = false;
             let mut escaped = false;
 
-            for (col_idx, ch) in line.chars().enumerate() {
+            for (col_idx, ch) in line.char_indices() {
                 if escaped {
                     escaped = false;
                     continue;

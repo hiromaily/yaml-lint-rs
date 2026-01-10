@@ -55,12 +55,12 @@ fn check_duplicate_keys_in_lines(context: &LintContext) -> Vec<LintProblem> {
         }
 
         // Check if this is a list item first
-        if trimmed.starts_with('-') {
+        if let Some(after_hyphen) = trimmed.strip_prefix('-') {
             // List item - create new scope for this item
             key_tracker.push((indent, HashSet::new()));
 
             // Check if the list item has inline key-value (e.g., "- name: value")
-            let after_dash = trimmed[1..].trim_start();
+            let after_dash = after_hyphen.trim_start();
             if let Some(colon_pos) = find_key_colon(after_dash) {
                 let key_part = &after_dash[..colon_pos].trim();
                 let key = extract_key(key_part);
@@ -157,10 +157,11 @@ fn extract_key(key_part: &str) -> String {
     let key = key_part.trim();
 
     // Remove surrounding quotes
-    if (key.starts_with('"') && key.ends_with('"')) || (key.starts_with('\'') && key.ends_with('\'')) {
-        if key.len() >= 2 {
-            return key[1..key.len() - 1].to_string();
-        }
+    if ((key.starts_with('"') && key.ends_with('"'))
+        || (key.starts_with('\'') && key.ends_with('\'')))
+        && key.len() >= 2
+    {
+        return key[1..key.len() - 1].to_string();
     }
 
     key.to_string()

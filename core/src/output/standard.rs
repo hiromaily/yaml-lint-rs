@@ -18,11 +18,7 @@ impl OutputFormatter for StandardFormatter {
 
         for problem in problems {
             // Format: "  12:3      error    trailing spaces  (trailing-spaces)"
-            output.push_str(&format!(
-                "  {}:{}",
-                problem.line,
-                problem.column,
-            ));
+            output.push_str(&format!("  {}:{}", problem.line, problem.column,));
 
             // Pad to align the level column (aim for column 12)
             let pos_str = format!("{}:{}", problem.line, problem.column);
@@ -80,7 +76,13 @@ mod tests {
     fn test_format_multiple_problems() {
         let formatter = StandardFormatter;
         let problems = vec![
-            LintProblem::new(1, 10, "trailing spaces", "trailing-spaces", LintLevel::Error),
+            LintProblem::new(
+                1,
+                10,
+                "trailing spaces",
+                "trailing-spaces",
+                LintLevel::Error,
+            ),
             LintProblem::new(5, 1, "line too long", "line-length", LintLevel::Warning),
         ];
 

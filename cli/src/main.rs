@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
 use walkdir::WalkDir;
-use yaml_lint_core::{Config, Linter, LintLevel};
+use yaml_lint_core::{Config, LintLevel, Linter};
 
 #[derive(Parser)]
 #[command(name = "yaml-lint")]
@@ -159,7 +159,10 @@ fn collect_yaml_files(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
                 }
             }
         } else {
-            eprintln!("Warning: {} is neither a file nor a directory", path.display());
+            eprintln!(
+                "Warning: {} is neither a file nor a directory",
+                path.display()
+            );
         }
     }
 

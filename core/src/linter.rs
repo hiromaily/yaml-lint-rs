@@ -1,9 +1,9 @@
 //! Main linting orchestration
 
+use crate::Result;
 use crate::config::Config;
 use crate::problem::LintProblem;
 use crate::rules::{LintContext, RuleRegistry};
-use crate::Result;
 use std::path::Path;
 
 /// Main linter that orchestrates the linting process
@@ -79,7 +79,10 @@ mod tests {
     #[test]
     fn test_lint_respects_config() {
         let mut config = Config::new();
-        config.rules.insert("trailing-spaces".to_string(), crate::rules::RuleLevel::Disable);
+        config.rules.insert(
+            "trailing-spaces".to_string(),
+            crate::rules::RuleLevel::Disable,
+        );
 
         let linter = Linter::new(config);
         let yaml = "key: value   \n";

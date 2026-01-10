@@ -1,7 +1,7 @@
 //! Configuration system for the linter
 
-use crate::rules::RuleLevel;
 use crate::Result;
+use crate::rules::RuleLevel;
 use indexmap::IndexMap;
 use std::path::Path;
 
@@ -28,12 +28,22 @@ impl Config {
         let mut config = Self::new();
 
         // Default configuration - all rules enabled as errors
-        config.rules.insert("trailing-spaces".to_string(), RuleLevel::Error);
-        config.rules.insert("line-length".to_string(), RuleLevel::Error);
-        config.rules.insert("document-start".to_string(), RuleLevel::Disable);
+        config
+            .rules
+            .insert("trailing-spaces".to_string(), RuleLevel::Error);
+        config
+            .rules
+            .insert("line-length".to_string(), RuleLevel::Error);
+        config
+            .rules
+            .insert("document-start".to_string(), RuleLevel::Disable);
         config.rules.insert("colons".to_string(), RuleLevel::Error);
-        config.rules.insert("key-duplicates".to_string(), RuleLevel::Error);
-        config.rules.insert("indentation".to_string(), RuleLevel::Error);
+        config
+            .rules
+            .insert("key-duplicates".to_string(), RuleLevel::Error);
+        config
+            .rules
+            .insert("indentation".to_string(), RuleLevel::Error);
 
         config
     }
@@ -43,12 +53,24 @@ impl Config {
         let mut config = Self::new();
 
         // Relaxed configuration - most rules as warnings
-        config.rules.insert("trailing-spaces".to_string(), RuleLevel::Warning);
-        config.rules.insert("line-length".to_string(), RuleLevel::Warning);
-        config.rules.insert("document-start".to_string(), RuleLevel::Disable);
-        config.rules.insert("colons".to_string(), RuleLevel::Warning);
-        config.rules.insert("key-duplicates".to_string(), RuleLevel::Error);
-        config.rules.insert("indentation".to_string(), RuleLevel::Warning);
+        config
+            .rules
+            .insert("trailing-spaces".to_string(), RuleLevel::Warning);
+        config
+            .rules
+            .insert("line-length".to_string(), RuleLevel::Warning);
+        config
+            .rules
+            .insert("document-start".to_string(), RuleLevel::Disable);
+        config
+            .rules
+            .insert("colons".to_string(), RuleLevel::Warning);
+        config
+            .rules
+            .insert("key-duplicates".to_string(), RuleLevel::Error);
+        config
+            .rules
+            .insert("indentation".to_string(), RuleLevel::Warning);
 
         config
     }
@@ -75,7 +97,7 @@ impl Config {
                     return Err(crate::LintError::ConfigError(format!(
                         "Unknown preset: {}",
                         extends
-                    )))
+                    )));
                 }
             };
         }
@@ -83,9 +105,9 @@ impl Config {
         // Parse rules
         if let Some(rules) = yaml.get("rules").and_then(|v| v.as_mapping()) {
             for (key, value) in rules {
-                let rule_name = key
-                    .as_str()
-                    .ok_or_else(|| crate::LintError::ConfigError("Rule name must be a string".to_string()))?;
+                let rule_name = key.as_str().ok_or_else(|| {
+                    crate::LintError::ConfigError("Rule name must be a string".to_string())
+                })?;
 
                 let level = match value {
                     serde_yaml::Value::String(s) => match s.as_str() {
@@ -96,7 +118,7 @@ impl Config {
                             return Err(crate::LintError::ConfigError(format!(
                                 "Invalid rule level: {}",
                                 s
-                            )))
+                            )));
                         }
                     },
                     serde_yaml::Value::Mapping(_) => {
@@ -107,7 +129,7 @@ impl Config {
                     _ => {
                         return Err(crate::LintError::ConfigError(
                             "Rule value must be a string or mapping".to_string(),
-                        ))
+                        ));
                     }
                 };
 

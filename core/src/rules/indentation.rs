@@ -120,13 +120,14 @@ impl Rule for IndentationRule {
                 let list_indent = current_indent;
 
                 // List items should be at a valid indentation level
-                if let Some(parent_indent) = indent_stack.last() {
-                    if list_indent <= *parent_indent && list_indent != 0 {
-                        // List at same or less indentation than parent
-                        // Pop stack until we find the right level
-                        while indent_stack.len() > 1 && indent_stack.last().unwrap() >= &list_indent {
-                            indent_stack.pop();
-                        }
+                if let Some(parent_indent) = indent_stack.last()
+                    && list_indent <= *parent_indent
+                    && list_indent != 0
+                {
+                    // List at same or less indentation than parent
+                    // Pop stack until we find the right level
+                    while indent_stack.len() > 1 && indent_stack.last().unwrap() >= &list_indent {
+                        indent_stack.pop();
                     }
                 }
 
@@ -158,7 +159,8 @@ impl Rule for IndentationRule {
                     expected_indent = Some(current_indent);
                 } else if current_indent < expected {
                     // Less indentation - pop stack
-                    while indent_stack.len() > 1 && indent_stack.last().unwrap() >= &current_indent {
+                    while indent_stack.len() > 1 && indent_stack.last().unwrap() >= &current_indent
+                    {
                         indent_stack.pop();
                     }
                     expected_indent = indent_stack.last().copied();
