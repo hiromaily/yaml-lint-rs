@@ -143,7 +143,7 @@ fn test_disable_rule() {
     let mut config = Config::with_default_preset();
     config.rules.insert(
         "trailing-spaces".to_string(),
-        yaml_lint_core::rules::RuleLevel::Disable,
+        yaml_lint_core::config::RuleConfig::Level(yaml_lint_core::rules::RuleLevel::Disable),
     );
     let linter = Linter::new(config);
 
