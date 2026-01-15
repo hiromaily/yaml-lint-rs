@@ -113,46 +113,25 @@ impl Config {
         let mut config = Self::new();
 
         // Default configuration - all rules enabled as errors
-        config.rules.insert(
-            "trailing-spaces".to_string(),
-            RuleConfig::Level(RuleLevel::Error),
-        );
-        config.rules.insert(
-            "line-length".to_string(),
-            RuleConfig::Level(RuleLevel::Error),
-        );
-        config.rules.insert(
-            "document-start".to_string(),
-            RuleConfig::Level(RuleLevel::Disable),
-        );
-        config
-            .rules
-            .insert("colons".to_string(), RuleConfig::Level(RuleLevel::Error));
-        config.rules.insert(
-            "key-duplicates".to_string(),
-            RuleConfig::Level(RuleLevel::Error),
-        );
-        config.rules.insert(
-            "indentation".to_string(),
-            RuleConfig::Level(RuleLevel::Error),
-        );
-        config.rules.insert(
-            "new-line-at-end-of-file".to_string(),
-            RuleConfig::Level(RuleLevel::Error),
-        );
-        config.rules.insert(
-            "empty-lines".to_string(),
-            RuleConfig::Level(RuleLevel::Error),
-        );
-        config
-            .rules
-            .insert("hyphens".to_string(), RuleConfig::Level(RuleLevel::Error));
-        config
-            .rules
-            .insert("comments".to_string(), RuleConfig::Level(RuleLevel::Error));
-        config
-            .rules
-            .insert("truthy".to_string(), RuleConfig::Level(RuleLevel::Warning));
+        let default_rules = [
+            ("trailing-spaces", RuleLevel::Error),
+            ("line-length", RuleLevel::Error),
+            ("document-start", RuleLevel::Disable),
+            ("colons", RuleLevel::Error),
+            ("key-duplicates", RuleLevel::Error),
+            ("indentation", RuleLevel::Error),
+            ("new-line-at-end-of-file", RuleLevel::Error),
+            ("empty-lines", RuleLevel::Error),
+            ("hyphens", RuleLevel::Error),
+            ("comments", RuleLevel::Error),
+            ("truthy", RuleLevel::Warning),
+        ];
+
+        for (rule_name, level) in default_rules {
+            config
+                .rules
+                .insert(rule_name.to_string(), RuleConfig::Level(level));
+        }
 
         config
     }
@@ -162,47 +141,25 @@ impl Config {
         let mut config = Self::new();
 
         // Relaxed configuration - most rules as warnings
-        config.rules.insert(
-            "trailing-spaces".to_string(),
-            RuleConfig::Level(RuleLevel::Warning),
-        );
-        config.rules.insert(
-            "line-length".to_string(),
-            RuleConfig::Level(RuleLevel::Warning),
-        );
-        config.rules.insert(
-            "document-start".to_string(),
-            RuleConfig::Level(RuleLevel::Disable),
-        );
-        config
-            .rules
-            .insert("colons".to_string(), RuleConfig::Level(RuleLevel::Warning));
-        config.rules.insert(
-            "key-duplicates".to_string(),
-            RuleConfig::Level(RuleLevel::Error),
-        );
-        config.rules.insert(
-            "indentation".to_string(),
-            RuleConfig::Level(RuleLevel::Warning),
-        );
-        config.rules.insert(
-            "new-line-at-end-of-file".to_string(),
-            RuleConfig::Level(RuleLevel::Warning),
-        );
-        config.rules.insert(
-            "empty-lines".to_string(),
-            RuleConfig::Level(RuleLevel::Warning),
-        );
-        config
-            .rules
-            .insert("hyphens".to_string(), RuleConfig::Level(RuleLevel::Warning));
-        config.rules.insert(
-            "comments".to_string(),
-            RuleConfig::Level(RuleLevel::Warning),
-        );
-        config
-            .rules
-            .insert("truthy".to_string(), RuleConfig::Level(RuleLevel::Warning));
+        let relaxed_rules = [
+            ("trailing-spaces", RuleLevel::Warning),
+            ("line-length", RuleLevel::Warning),
+            ("document-start", RuleLevel::Disable),
+            ("colons", RuleLevel::Warning),
+            ("key-duplicates", RuleLevel::Error),
+            ("indentation", RuleLevel::Warning),
+            ("new-line-at-end-of-file", RuleLevel::Warning),
+            ("empty-lines", RuleLevel::Warning),
+            ("hyphens", RuleLevel::Warning),
+            ("comments", RuleLevel::Warning),
+            ("truthy", RuleLevel::Warning),
+        ];
+
+        for (rule_name, level) in relaxed_rules {
+            config
+                .rules
+                .insert(rule_name.to_string(), RuleConfig::Level(level));
+        }
 
         config
     }
@@ -398,14 +355,17 @@ impl Config {
 
     /// Parse document-start options
     fn parse_document_start_options(map: &serde_yaml::Mapping) -> Result<RuleOptions> {
-        let present = map
-            .get(serde_yaml::Value::String("present".to_string()))
-            .and_then(|v| v.as_bool());
+        let present_value = map.get(serde_yaml::Value::String("present".to_string()));
 
-        let present_config = match present {
-            Some(true) => DocumentStartConfig::Required,
-            Some(false) => DocumentStartConfig::Forbidden,
+        let present_config = match present_value {
+            Some(serde_yaml::Value::Bool(true)) => DocumentStartConfig::Required,
+            Some(serde_yaml::Value::Bool(false)) => DocumentStartConfig::Forbidden,
             None => DocumentStartConfig::Disabled,
+            Some(_) => {
+                return Err(crate::LintError::ConfigError(
+                    "document-start 'present' must be a boolean (true or false)".to_string(),
+                ));
+            }
         };
 
         Ok(RuleOptions::DocumentStart {
@@ -529,6 +489,22 @@ impl Config {
 
     /// Create a RuleRegistry configured according to this Config
     pub fn create_registry(&self) -> crate::rules::RuleRegistry {
+        // Macro to reduce boilerplate when constructing rules with options
+        macro_rules! construct_rule {
+            // Rule without options
+            ($rule_type:path) => {
+                Box::new($rule_type)
+            };
+            // Rule with simple options pattern
+            ($rule_config:expr, $pattern:pat => $with_config:expr, $default:expr) => {
+                if let Some($pattern) = $rule_config.options() {
+                    Box::new($with_config)
+                } else {
+                    Box::new($default)
+                }
+            };
+        }
+
         let mut registry = crate::rules::RuleRegistry::new();
 
         // If no rules configured, use defaults
@@ -542,14 +518,15 @@ impl Config {
 
             // Construct rule with options
             let rule: Box<dyn crate::rules::Rule> = match rule_name.as_str() {
-                "trailing-spaces" => Box::new(crate::rules::trailing_spaces::TrailingSpacesRule),
-                "line-length" => {
-                    if let Some(RuleOptions::LineLength { max }) = rule_config.options() {
-                        Box::new(crate::rules::line_length::LineLengthRule::with_max(*max))
-                    } else {
-                        Box::new(crate::rules::line_length::LineLengthRule::new())
-                    }
+                "trailing-spaces" => {
+                    construct_rule!(crate::rules::trailing_spaces::TrailingSpacesRule)
                 }
+                "line-length" => construct_rule!(
+                    rule_config,
+                    RuleOptions::LineLength { max } =>
+                        crate::rules::line_length::LineLengthRule::with_max(*max),
+                    crate::rules::line_length::LineLengthRule::new()
+                ),
                 "document-start" => {
                     if let Some(RuleOptions::DocumentStart { present }) = rule_config.options() {
                         match present {
@@ -567,21 +544,20 @@ impl Config {
                         Box::new(crate::rules::document_start::DocumentStartRule::new())
                     }
                 }
-                "colons" => {
-                    if let Some(RuleOptions::Colons {
+                "colons" => construct_rule!(
+                    rule_config,
+                    RuleOptions::Colons {
                         max_spaces_before,
                         max_spaces_after,
-                    }) = rule_config.options()
-                    {
-                        Box::new(crate::rules::colons::ColonsRule::with_spacing(
-                            *max_spaces_before,
-                            *max_spaces_after,
-                        ))
-                    } else {
-                        Box::new(crate::rules::colons::ColonsRule::new())
-                    }
+                    } => crate::rules::colons::ColonsRule::with_spacing(
+                        *max_spaces_before,
+                        *max_spaces_after
+                    ),
+                    crate::rules::colons::ColonsRule::new()
+                ),
+                "key-duplicates" => {
+                    construct_rule!(crate::rules::key_duplicates::KeyDuplicatesRule)
                 }
-                "key-duplicates" => Box::new(crate::rules::key_duplicates::KeyDuplicatesRule),
                 "indentation" => {
                     if let Some(RuleOptions::Indentation { spaces }) = rule_config.options() {
                         match spaces {
@@ -597,61 +573,51 @@ impl Config {
                     }
                 }
                 "new-line-at-end-of-file" => {
-                    Box::new(crate::rules::new_line_at_end_of_file::NewLineAtEndOfFileRule)
+                    construct_rule!(crate::rules::new_line_at_end_of_file::NewLineAtEndOfFileRule)
                 }
-                "empty-lines" => {
-                    if let Some(RuleOptions::EmptyLines {
+                "empty-lines" => construct_rule!(
+                    rule_config,
+                    RuleOptions::EmptyLines {
                         max,
                         max_start,
                         max_end,
-                    }) = rule_config.options()
-                    {
-                        Box::new(crate::rules::empty_lines::EmptyLinesRule::with_config(
-                            *max, *max_start, *max_end,
-                        ))
-                    } else {
-                        Box::new(crate::rules::empty_lines::EmptyLinesRule::new())
-                    }
-                }
-                "hyphens" => {
-                    if let Some(RuleOptions::Hyphens { max_spaces_after }) = rule_config.options() {
-                        Box::new(crate::rules::hyphens::HyphensRule::with_config(
-                            *max_spaces_after,
-                        ))
-                    } else {
-                        Box::new(crate::rules::hyphens::HyphensRule::new())
-                    }
-                }
-                "comments" => {
-                    if let Some(RuleOptions::Comments {
+                    } => crate::rules::empty_lines::EmptyLinesRule::with_config(
+                        *max,
+                        *max_start,
+                        *max_end
+                    ),
+                    crate::rules::empty_lines::EmptyLinesRule::new()
+                ),
+                "hyphens" => construct_rule!(
+                    rule_config,
+                    RuleOptions::Hyphens { max_spaces_after } =>
+                        crate::rules::hyphens::HyphensRule::with_config(*max_spaces_after),
+                    crate::rules::hyphens::HyphensRule::new()
+                ),
+                "comments" => construct_rule!(
+                    rule_config,
+                    RuleOptions::Comments {
                         require_starting_space,
                         ignore_shebangs,
                         min_spaces_from_content,
-                    }) = rule_config.options()
-                    {
-                        Box::new(crate::rules::comments::CommentsRule::with_config(
-                            *require_starting_space,
-                            *ignore_shebangs,
-                            *min_spaces_from_content,
-                        ))
-                    } else {
-                        Box::new(crate::rules::comments::CommentsRule::new())
-                    }
-                }
-                "truthy" => {
-                    if let Some(RuleOptions::Truthy {
+                    } => crate::rules::comments::CommentsRule::with_config(
+                        *require_starting_space,
+                        *ignore_shebangs,
+                        *min_spaces_from_content
+                    ),
+                    crate::rules::comments::CommentsRule::new()
+                ),
+                "truthy" => construct_rule!(
+                    rule_config,
+                    RuleOptions::Truthy {
                         allowed_values,
                         check_keys,
-                    }) = rule_config.options()
-                    {
-                        Box::new(crate::rules::truthy::TruthyRule::with_config(
-                            allowed_values.clone(),
-                            *check_keys,
-                        ))
-                    } else {
-                        Box::new(crate::rules::truthy::TruthyRule::new())
-                    }
-                }
+                    } => crate::rules::truthy::TruthyRule::with_config(
+                        allowed_values.clone(),
+                        *check_keys
+                    ),
+                    crate::rules::truthy::TruthyRule::new()
+                ),
                 _ => continue, // Skip unknown rules
             };
 

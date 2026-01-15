@@ -412,3 +412,21 @@ rules:
             .contains("does not support options")
     );
 }
+
+#[test]
+fn test_document_start_invalid_type_error() {
+    let config_yaml = r#"
+rules:
+  document-start:
+    present: "true"
+"#;
+    let result = Config::load_from_str(config_yaml);
+    assert!(result.is_err(), "Expected error for non-boolean value");
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("must be a boolean"),
+        "Error message should indicate boolean type required"
+    );
+}
