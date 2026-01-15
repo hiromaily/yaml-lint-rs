@@ -7,27 +7,52 @@ extends: default
 
 # Configure individual rules
 rules:
-  # Trailing spaces - always enabled as error
+  # Trailing spaces - no options, just set level
   trailing-spaces: error
 
-  # Line length - maximum 120 characters
+  # Line length - maximum characters per line (default: 80)
   line-length:
     max: 120
 
-  # Document start - require --- at the beginning
-  document-start: error
+  # Document start - require, forbid, or disable --- marker
+  document-start:
+    present: true  # true = required, false = forbidden
 
-  # Colons - control spacing around colons
-  # max-spaces-before: 0, max-spaces-after: 1 (default)
-  colons: error
+  # Colons - control spacing around colons in mappings
+  colons:
+    max-spaces-before: 0  # default: 0
+    max-spaces-after: 1   # default: 1
 
-  # Key duplicates - prevent duplicate keys
+  # Key duplicates - no options, just set level
   key-duplicates: error
 
-  # Indentation - enforce consistent indentation
-  # spaces: 2 or 4 or "consistent" to auto-detect
+  # Indentation - enforce consistent spacing
   indentation:
-    spaces: 2
+    spaces: 2  # Can be 2, 4, or "consistent" to auto-detect
+
+  # New line at end of file - no options, just set level
+  new-line-at-end-of-file: error
+
+  # Empty lines - control consecutive blank lines
+  empty-lines:
+    max: 2        # Maximum consecutive blank lines (default: 2)
+    max-start: 0  # Maximum blank lines at file start (default: 0)
+    max-end: 0    # Maximum blank lines at file end (default: 0)
+
+  # Hyphens - control spacing after list item hyphens
+  hyphens:
+    max-spaces-after: 1  # default: 1
+
+  # Comments - enforce comment formatting
+  comments:
+    require-starting-space: true  # Require space after # (default: true)
+    ignore-shebangs: true         # Ignore #!/... lines (default: true)
+    min-spaces-from-content: 2    # Min spaces before inline comments (default: 2)
+
+  # Truthy - restrict boolean representations
+  truthy:
+    allowed-values: ["true", "false"]  # default: ["true", "false"]
+    check-keys: false                   # Also check mapping keys (default: false)
 
 # Ignore patterns (one per line)
 # Uses .gitignore-style patterns
@@ -37,7 +62,17 @@ ignore: |
   *.generated.yaml
   *.template.yml
 
-# Alternative relaxed configuration:
+# Alternative: Relaxed configuration with custom rules
 # extends: relaxed
 # rules:
-#   key-duplicates: error  # Keep this as error even in relaxed mode
+#   line-length:
+#     max: 100
+#   key-duplicates: error  # Keep as error even in relaxed mode
+#   truthy:
+#     allowed-values: ["true", "false", "yes", "no"]  # Allow more values
+
+# Alternative: Minimal configuration (string levels only)
+# rules:
+#   trailing-spaces: warning
+#   line-length: error
+#   document-start: disable

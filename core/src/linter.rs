@@ -16,12 +16,7 @@ pub struct Linter {
 impl Linter {
     /// Create a new linter with the given configuration
     pub fn new(config: Config) -> Self {
-        let mut registry = RuleRegistry::with_defaults();
-
-        // Apply config rule levels to registry
-        for (rule_name, level) in &config.rules {
-            registry.set_level(rule_name, *level);
-        }
+        let registry = config.create_registry();
 
         Self { config, registry }
     }
@@ -81,7 +76,7 @@ mod tests {
         let mut config = Config::new();
         config.rules.insert(
             "trailing-spaces".to_string(),
-            crate::rules::RuleLevel::Disable,
+            crate::config::RuleConfig::Level(crate::rules::RuleLevel::Disable),
         );
 
         let linter = Linter::new(config);
