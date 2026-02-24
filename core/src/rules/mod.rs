@@ -3,10 +3,13 @@
 use crate::problem::LintProblem;
 use indexmap::IndexMap;
 
+pub mod braces;
+pub mod brackets;
 pub mod colons;
 pub mod comments;
 pub mod document_start;
 pub mod empty_lines;
+pub mod flow_collection;
 pub mod hyphens;
 pub mod indentation;
 pub mod key_duplicates;
@@ -98,6 +101,8 @@ impl RuleRegistry {
         registry.register(Box::new(hyphens::HyphensRule::new()));
         registry.register(Box::new(comments::CommentsRule::new()));
         registry.register(Box::new(truthy::TruthyRule::new()));
+        registry.register(Box::new(braces::BracesRule::new()));
+        registry.register(Box::new(brackets::BracketsRule::new()));
         registry
     }
 
