@@ -9,6 +9,7 @@ pub mod colons;
 pub mod comments;
 pub mod document_start;
 pub mod empty_lines;
+pub mod flow_collection;
 pub mod hyphens;
 pub mod indentation;
 pub mod key_duplicates;
