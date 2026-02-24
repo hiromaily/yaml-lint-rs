@@ -363,6 +363,90 @@ answer: "yes"       # String, not boolean true
 - Quoted values are not flagged (they are strings)
 - Critical for Kubernetes/Helm users
 
+### braces
+
+**Level**: Error (default)
+**Configurable**: Yes
+**Fixable**: ❌ No
+
+Controls spacing inside flow mappings (braces `{}`).
+
+**Configuration**:
+```yaml
+rules:
+  braces:
+    forbid: false              # Forbid flow mappings entirely (default: false)
+    min-spaces-inside: 0       # Minimum spaces inside braces (default: 0)
+    max-spaces-inside: 0       # Maximum spaces inside braces (default: 0)
+    min-spaces-inside-empty: -1  # For empty braces, -1 uses min-spaces-inside
+    max-spaces-inside-empty: -1  # For empty braces, -1 uses max-spaces-inside
+```
+
+**Why it matters**: Enforces consistent formatting in flow-style mappings for readability.
+
+**Examples**:
+
+```yaml
+# Bad (with max-spaces-inside: 0)
+mapping: { key: value }     # spaces inside braces
+
+# Good
+mapping: {key: value}
+
+# With forbid: true, require block style
+mapping:
+  key: value
+```
+
+**Notes**:
+
+- Braces inside quoted strings are ignored
+- Braces in comments are ignored
+- Empty braces (`{}`) have separate spacing options
+
+### brackets
+
+**Level**: Error (default)
+**Configurable**: Yes
+**Fixable**: ❌ No
+
+Controls spacing inside flow sequences (brackets `[]`).
+
+**Configuration**:
+```yaml
+rules:
+  brackets:
+    forbid: false              # Forbid flow sequences entirely (default: false)
+    min-spaces-inside: 0       # Minimum spaces inside brackets (default: 0)
+    max-spaces-inside: 0       # Maximum spaces inside brackets (default: 0)
+    min-spaces-inside-empty: -1  # For empty brackets, -1 uses min-spaces-inside
+    max-spaces-inside-empty: -1  # For empty brackets, -1 uses max-spaces-inside
+```
+
+**Why it matters**: Enforces consistent formatting in flow-style sequences for readability.
+
+**Examples**:
+
+```yaml
+# Bad (with max-spaces-inside: 0)
+sequence: [ 1, 2, 3 ]       # spaces inside brackets
+
+# Good
+sequence: [1, 2, 3]
+
+# With forbid: true, require block style
+sequence:
+  - 1
+  - 2
+  - 3
+```
+
+**Notes**:
+
+- Brackets inside quoted strings are ignored
+- Brackets in comments are ignored
+- Empty brackets (`[]`) have separate spacing options
+
 ## Rule Levels
 
 Each rule can be configured with one of three levels:
@@ -376,6 +460,7 @@ Each rule can be configured with one of three levels:
 ### default (strict)
 
 All rules enabled as errors, except:
+
 - `document-start`: disabled
 
 Suitable for production code.
@@ -383,6 +468,7 @@ Suitable for production code.
 ### relaxed
 
 Most rules as warnings:
+
 - `trailing-spaces`: warning
 - `line-length`: warning
 - `colons`: warning
@@ -392,6 +478,8 @@ Most rules as warnings:
 - `hyphens`: warning
 - `comments`: warning
 - `truthy`: warning
+- `braces`: warning
+- `brackets`: warning
 - `key-duplicates`: error (kept as error)
 - `document-start`: disabled
 
@@ -400,9 +488,6 @@ More permissive for development and experimentation.
 ## Future Rules (Planned)
 
 The following rules are planned for future releases:
-
-### braces / brackets
-Control spacing in flow collections `{}` and `[]`.
 
 ### comments-indentation
 Enforce that comments are indented like content.

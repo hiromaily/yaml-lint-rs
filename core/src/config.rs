@@ -68,6 +68,20 @@ pub enum RuleOptions {
     DocumentStart {
         present: DocumentStartConfig,
     },
+    Braces {
+        forbid: bool,
+        min_spaces_inside: usize,
+        max_spaces_inside: usize,
+        min_spaces_inside_empty: i32,
+        max_spaces_inside_empty: i32,
+    },
+    Brackets {
+        forbid: bool,
+        min_spaces_inside: usize,
+        max_spaces_inside: usize,
+        min_spaces_inside_empty: i32,
+        max_spaces_inside_empty: i32,
+    },
 }
 
 /// Indentation configuration
@@ -125,6 +139,8 @@ impl Config {
             ("hyphens", RuleLevel::Error),
             ("comments", RuleLevel::Error),
             ("truthy", RuleLevel::Warning),
+            ("braces", RuleLevel::Error),
+            ("brackets", RuleLevel::Error),
         ];
 
         for (rule_name, level) in default_rules {
@@ -153,6 +169,8 @@ impl Config {
             ("hyphens", RuleLevel::Warning),
             ("comments", RuleLevel::Warning),
             ("truthy", RuleLevel::Warning),
+            ("braces", RuleLevel::Warning),
+            ("brackets", RuleLevel::Warning),
         ];
 
         for (rule_name, level) in relaxed_rules {
@@ -181,6 +199,8 @@ impl Config {
             "comments" => Self::parse_comments_options(map),
             "truthy" => Self::parse_truthy_options(map),
             "document-start" => Self::parse_document_start_options(map),
+            "braces" => Self::parse_braces_options(map),
+            "brackets" => Self::parse_brackets_options(map),
             _ => Err(crate::LintError::ConfigError(format!(
                 "Rule '{}' does not support options",
                 rule_name
@@ -370,6 +390,94 @@ impl Config {
 
         Ok(RuleOptions::DocumentStart {
             present: present_config,
+        })
+    }
+
+    /// Parse braces options
+    fn parse_braces_options(map: &serde_yaml::Mapping) -> Result<RuleOptions> {
+        let forbid = map
+            .get(serde_yaml::Value::String("forbid".to_string()))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let min_spaces_inside = map
+            .get(serde_yaml::Value::String("min-spaces-inside".to_string()))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(0);
+
+        let max_spaces_inside = map
+            .get(serde_yaml::Value::String("max-spaces-inside".to_string()))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(0);
+
+        let min_spaces_inside_empty = map
+            .get(serde_yaml::Value::String(
+                "min-spaces-inside-empty".to_string(),
+            ))
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32)
+            .unwrap_or(-1);
+
+        let max_spaces_inside_empty = map
+            .get(serde_yaml::Value::String(
+                "max-spaces-inside-empty".to_string(),
+            ))
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32)
+            .unwrap_or(-1);
+
+        Ok(RuleOptions::Braces {
+            forbid,
+            min_spaces_inside,
+            max_spaces_inside,
+            min_spaces_inside_empty,
+            max_spaces_inside_empty,
+        })
+    }
+
+    /// Parse brackets options
+    fn parse_brackets_options(map: &serde_yaml::Mapping) -> Result<RuleOptions> {
+        let forbid = map
+            .get(serde_yaml::Value::String("forbid".to_string()))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let min_spaces_inside = map
+            .get(serde_yaml::Value::String("min-spaces-inside".to_string()))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(0);
+
+        let max_spaces_inside = map
+            .get(serde_yaml::Value::String("max-spaces-inside".to_string()))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(0);
+
+        let min_spaces_inside_empty = map
+            .get(serde_yaml::Value::String(
+                "min-spaces-inside-empty".to_string(),
+            ))
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32)
+            .unwrap_or(-1);
+
+        let max_spaces_inside_empty = map
+            .get(serde_yaml::Value::String(
+                "max-spaces-inside-empty".to_string(),
+            ))
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32)
+            .unwrap_or(-1);
+
+        Ok(RuleOptions::Brackets {
+            forbid,
+            min_spaces_inside,
+            max_spaces_inside,
+            min_spaces_inside_empty,
+            max_spaces_inside_empty,
         })
     }
 
@@ -617,6 +725,40 @@ impl Config {
                         *check_keys
                     ),
                     crate::rules::truthy::TruthyRule::new()
+                ),
+                "braces" => construct_rule!(
+                    rule_config,
+                    RuleOptions::Braces {
+                        forbid,
+                        min_spaces_inside,
+                        max_spaces_inside,
+                        min_spaces_inside_empty,
+                        max_spaces_inside_empty,
+                    } => crate::rules::braces::BracesRule::with_config(
+                        *forbid,
+                        *min_spaces_inside,
+                        *max_spaces_inside,
+                        *min_spaces_inside_empty,
+                        *max_spaces_inside_empty
+                    ),
+                    crate::rules::braces::BracesRule::new()
+                ),
+                "brackets" => construct_rule!(
+                    rule_config,
+                    RuleOptions::Brackets {
+                        forbid,
+                        min_spaces_inside,
+                        max_spaces_inside,
+                        min_spaces_inside_empty,
+                        max_spaces_inside_empty,
+                    } => crate::rules::brackets::BracketsRule::with_config(
+                        *forbid,
+                        *min_spaces_inside,
+                        *max_spaces_inside,
+                        *min_spaces_inside_empty,
+                        *max_spaces_inside_empty
+                    ),
+                    crate::rules::brackets::BracketsRule::new()
                 ),
                 _ => continue, // Skip unknown rules
             };
