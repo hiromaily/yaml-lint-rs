@@ -3,6 +3,7 @@
 use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use is_terminal::IsTerminal;
+use rayon::prelude::*;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -60,6 +61,10 @@ struct Cli {
     /// Show what would be fixed without making changes
     #[arg(long)]
     dry_run: bool,
+
+    /// Number of parallel jobs (0 = auto-detect based on CPU count)
+    #[arg(short = 'j', long, default_value = "0")]
+    jobs: usize,
 }
 
 fn main() -> Result<()> {
@@ -67,6 +72,9 @@ fn main() -> Result<()> {
 
     // Configure color output
     configure_colors(&cli.color);
+
+    // Configure rayon thread pool
+    configure_thread_pool(cli.jobs)?;
 
     // Load configuration
     let config = load_config(&cli)?;
@@ -101,19 +109,28 @@ fn main() -> Result<()> {
 
     let formatter = format.formatter();
 
-    // Lint all files
+    // Lint all files in parallel, collect results ordered by file path
+    let lint_results: Vec<(PathBuf, anyhow::Result<Vec<yaml_lint_core::LintProblem>>)> = yaml_files
+        .par_iter()
+        .map(|file| {
+            let result = linter.lint_file(file).map_err(|e| anyhow::anyhow!("{}", e));
+            (file.clone(), result)
+        })
+        .collect();
+
+    // Output results in deterministic file order
     let mut has_errors = false;
     let mut has_warnings = false;
     let mut total_problems = 0;
 
-    for file in &yaml_files {
-        match linter.lint_file(file) {
+    for (file, result) in &lint_results {
+        match result {
             Ok(problems) => {
                 if !problems.is_empty() {
-                    let output = formatter.format_problems(&problems, &file.display().to_string());
+                    let output = formatter.format_problems(problems, &file.display().to_string());
                     print!("{}", output);
 
-                    for problem in &problems {
+                    for problem in problems {
                         match problem.level {
                             LintLevel::Error => has_errors = true,
                             LintLevel::Warning => has_warnings = true,
@@ -151,29 +168,39 @@ fn main() -> Result<()> {
 }
 
 /// Run in fix mode
-#[allow(clippy::collapsible_if)] // Nested ifs required for MSRV 1.85 compatibility
 fn run_fix_mode(cli: &Cli, config: &Config, yaml_files: &[PathBuf]) -> Result<()> {
     let registry = config.create_registry();
     let fixer = Fixer::new(&registry);
+
+    let is_dry_run = cli.dry_run;
+
+    // Process files in parallel, collect results ordered by file path
+    type FixEntry = (PathBuf, anyhow::Result<yaml_lint_core::FixResult>);
+    let fix_results: Vec<FixEntry> = yaml_files
+        .par_iter()
+        .map(|file| {
+            let result = fs::read_to_string(file)
+                .with_context(|| format!("Failed to read {}", file.display()))
+                .map(|content| fixer.fix(&file.display().to_string(), &content));
+            (file.clone(), result)
+        })
+        .collect();
 
     let mut total_fixed = 0;
     let mut files_fixed = 0;
     let mut files_with_unfixable = 0;
 
-    let is_dry_run = cli.dry_run;
+    for (file, result) in &fix_results {
+        let fix_result = result
+            .as_ref()
+            .map_err(|e| anyhow::anyhow!("{}", e))
+            .with_context(|| format!("Failed to process {}", file.display()))?;
 
-    for file in yaml_files {
-        let content = fs::read_to_string(file)
-            .with_context(|| format!("Failed to read {}", file.display()))?;
-
-        let result = fixer.fix(&file.display().to_string(), &content);
-
-        if result.has_fixes() {
+        if fix_result.has_fixes() {
             files_fixed += 1;
-            total_fixed += result.fixes_applied;
+            total_fixed += fix_result.fixes_applied;
 
-            // Format fix summary for this file
-            let fix_summary: Vec<String> = result
+            let fix_summary: Vec<String> = fix_result
                 .fixes_by_rule
                 .iter()
                 .map(|(rule, count)| format!("{}: {}", rule, count))
@@ -184,20 +211,21 @@ fn run_fix_mode(cli: &Cli, config: &Config, yaml_files: &[PathBuf]) -> Result<()
                 "{}: {} {} issue(s) ({})",
                 file.display(),
                 action,
-                result.fixes_applied,
+                fix_result.fixes_applied,
                 fix_summary.join(", ")
             );
 
             // Write fixed content (only in non-dry-run mode)
+            #[allow(clippy::collapsible_if)] // Nested ifs required for MSRV 1.85 compatibility
             if !is_dry_run {
-                if let Some(fixed_content) = &result.fixed_content {
+                if let Some(fixed_content) = &fix_result.fixed_content {
                     fs::write(file, fixed_content)
                         .with_context(|| format!("Failed to write {}", file.display()))?;
                 }
             }
         }
 
-        if result.has_unfixable() {
+        if fix_result.has_unfixable() {
             files_with_unfixable += 1;
         }
     }
@@ -218,6 +246,20 @@ fn run_fix_mode(cli: &Cli, config: &Config, yaml_files: &[PathBuf]) -> Result<()
         std::process::exit(1);
     }
 
+    Ok(())
+}
+
+/// Configure rayon thread pool size
+///
+/// `jobs == 0` means auto-detect (use rayon default, which uses all logical CPUs).
+/// `jobs >= 1` sets an explicit thread count.
+fn configure_thread_pool(jobs: usize) -> Result<()> {
+    if jobs > 0 {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(jobs)
+            .build_global()
+            .context("Failed to configure thread pool")?;
+    }
     Ok(())
 }
 

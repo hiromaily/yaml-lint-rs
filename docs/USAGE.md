@@ -150,6 +150,7 @@ yaml-lint [OPTIONS] <FILES>...
 | `-d, --preset <NAME>` | Use preset (default, relaxed) |
 | `-f, --format <FORMAT>` | Output format (standard, colored, parsable) |
 | `--strict` | Treat warnings as errors (exit code 2) |
+| `-j, --jobs <N>` | Number of parallel jobs (0 = auto-detect, default: 0) |
 | `--list-files` | List files that would be linted |
 | `-h, --help` | Show help |
 | `-V, --version` | Show version |
@@ -171,6 +172,12 @@ yaml-lint --strict file.yaml
 
 # List files without linting
 yaml-lint --list-files src/
+
+# Parallel linting with 4 threads
+yaml-lint -j 4 src/
+
+# Single-threaded (useful for debugging)
+yaml-lint -j 1 src/
 ```
 
 ## Output Formats
