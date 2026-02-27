@@ -14,6 +14,7 @@ Built with [Claude Code](https://www.anthropic.com/claude-code) and [Cursor](htt
 ## Features
 
 - ✅ Fast and efficient YAML linting
+- ✅ **Parallel linting** using all CPU cores (`-j`/`--jobs`)
 - ✅ **Auto-fix** support for common issues (`--fix`)
 - ✅ Multiple output formats (standard, colored, parsable)
 - ✅ Configurable rules with preset configurations
@@ -133,6 +134,19 @@ yaml-lint --dry-run file.yaml
 - `trailing-spaces` - Removes trailing whitespace
 - `new-line-at-end-of-file` - Adds missing newline at end of file
 - `empty-lines` - Removes excess blank lines
+
+### Parallel linting
+
+```bash
+# Auto-detect thread count (default — uses all logical CPUs)
+yaml-lint src/
+
+# Explicit thread count
+yaml-lint -j 4 src/
+
+# Single-threaded (useful for debugging)
+yaml-lint -j 1 src/
+```
 
 ### Options
 
@@ -270,7 +284,7 @@ key: |
 - [x] Phase 1: Core infrastructure + 6 priority rules
 - [ ] Phase 2: Additional output formats, directives, more rules
 - [ ] Phase 3: Full yamllint parity (23 rules)
-- [ ] Phase 4: Performance optimizations, parallel linting
+- [x] Phase 4: Performance optimizations, parallel linting
 - [ ] Phase 5: Editor integration (LSP?)
 
 ## Contributing

@@ -113,7 +113,7 @@ fn main() -> Result<()> {
     let lint_results: Vec<(PathBuf, anyhow::Result<Vec<yaml_lint_core::LintProblem>>)> = yaml_files
         .par_iter()
         .map(|file| {
-            let result = linter.lint_file(file).map_err(|e| anyhow::anyhow!("{}", e));
+            let result = linter.lint_file(file).map_err(Into::into);
             (file.clone(), result)
         })
         .collect();
@@ -167,6 +167,14 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// Minimal per-file summary collected from the parallel fix phase.
+struct FixFileSummary {
+    has_fixes: bool,
+    fixes_applied: usize,
+    fix_rule_summary: Vec<String>,
+    has_unfixable: bool,
+}
+
 /// Run in fix mode
 fn run_fix_mode(cli: &Cli, config: &Config, yaml_files: &[PathBuf]) -> Result<()> {
     let registry = config.create_registry();
@@ -174,14 +182,39 @@ fn run_fix_mode(cli: &Cli, config: &Config, yaml_files: &[PathBuf]) -> Result<()
 
     let is_dry_run = cli.dry_run;
 
-    // Process files in parallel, collect results ordered by file path
-    type FixEntry = (PathBuf, anyhow::Result<yaml_lint_core::FixResult>);
+    // Process files in parallel.
+    // Fixed content is written to disk immediately inside the parallel phase so
+    // the full content of every file is never held in memory simultaneously.
+    type FixEntry = (PathBuf, anyhow::Result<FixFileSummary>);
     let fix_results: Vec<FixEntry> = yaml_files
         .par_iter()
         .map(|file| {
-            let result = fs::read_to_string(file)
-                .with_context(|| format!("Failed to read {}", file.display()))
-                .map(|content| fixer.fix(&file.display().to_string(), &content));
+            let result = (|| -> anyhow::Result<FixFileSummary> {
+                let content = fs::read_to_string(file)
+                    .with_context(|| format!("Failed to read {}", file.display()))?;
+                let fix_result = fixer.fix(&file.display().to_string(), &content);
+
+                // Write fixed content immediately to avoid holding all file contents in
+                // memory at once (only in non-dry-run mode).
+                #[allow(clippy::collapsible_if)] // Nested ifs required for MSRV 1.85 compatibility
+                if !is_dry_run {
+                    if let Some(fixed_content) = &fix_result.fixed_content {
+                        fs::write(file, fixed_content)
+                            .with_context(|| format!("Failed to write {}", file.display()))?;
+                    }
+                }
+
+                Ok(FixFileSummary {
+                    has_fixes: fix_result.has_fixes(),
+                    fixes_applied: fix_result.fixes_applied,
+                    fix_rule_summary: fix_result
+                        .fixes_by_rule
+                        .iter()
+                        .map(|(rule, count)| format!("{}: {}", rule, count))
+                        .collect(),
+                    has_unfixable: fix_result.has_unfixable(),
+                })
+            })();
             (file.clone(), result)
         })
         .collect();
@@ -190,42 +223,25 @@ fn run_fix_mode(cli: &Cli, config: &Config, yaml_files: &[PathBuf]) -> Result<()
     let mut files_fixed = 0;
     let mut files_with_unfixable = 0;
 
-    for (file, result) in &fix_results {
-        let fix_result = result
-            .as_ref()
-            .map_err(|e| anyhow::anyhow!("{}", e))
-            .with_context(|| format!("Failed to process {}", file.display()))?;
+    // Print results in deterministic file order
+    for (file, result) in fix_results {
+        let summary = result.with_context(|| format!("Failed to process {}", file.display()))?;
 
-        if fix_result.has_fixes() {
+        if summary.has_fixes {
             files_fixed += 1;
-            total_fixed += fix_result.fixes_applied;
-
-            let fix_summary: Vec<String> = fix_result
-                .fixes_by_rule
-                .iter()
-                .map(|(rule, count)| format!("{}: {}", rule, count))
-                .collect();
+            total_fixed += summary.fixes_applied;
 
             let action = if is_dry_run { "would fix" } else { "fixed" };
             println!(
                 "{}: {} {} issue(s) ({})",
                 file.display(),
                 action,
-                fix_result.fixes_applied,
-                fix_summary.join(", ")
+                summary.fixes_applied,
+                summary.fix_rule_summary.join(", ")
             );
-
-            // Write fixed content (only in non-dry-run mode)
-            #[allow(clippy::collapsible_if)] // Nested ifs required for MSRV 1.85 compatibility
-            if !is_dry_run {
-                if let Some(fixed_content) = &fix_result.fixed_content {
-                    fs::write(file, fixed_content)
-                        .with_context(|| format!("Failed to write {}", file.display()))?;
-                }
-            }
         }
 
-        if fix_result.has_unfixable() {
+        if summary.has_unfixable {
             files_with_unfixable += 1;
         }
     }
