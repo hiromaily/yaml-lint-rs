@@ -3,6 +3,7 @@
 use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use is_terminal::IsTerminal;
+use rayon::prelude::*;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -60,6 +61,10 @@ struct Cli {
     /// Show what would be fixed without making changes
     #[arg(long)]
     dry_run: bool,
+
+    /// Number of parallel jobs (0 = auto-detect based on CPU count)
+    #[arg(short = 'j', long, default_value = "0")]
+    jobs: usize,
 }
 
 fn main() -> Result<()> {
@@ -67,6 +72,9 @@ fn main() -> Result<()> {
 
     // Configure color output
     configure_colors(&cli.color);
+
+    // Configure rayon thread pool
+    configure_thread_pool(cli.jobs)?;
 
     // Load configuration
     let config = load_config(&cli)?;
@@ -101,19 +109,28 @@ fn main() -> Result<()> {
 
     let formatter = format.formatter();
 
-    // Lint all files
+    // Lint all files in parallel, collect results ordered by file path
+    let lint_results: Vec<(PathBuf, anyhow::Result<Vec<yaml_lint_core::LintProblem>>)> = yaml_files
+        .par_iter()
+        .map(|file| {
+            let result = linter.lint_file(file).map_err(Into::into);
+            (file.clone(), result)
+        })
+        .collect();
+
+    // Output results in deterministic file order
     let mut has_errors = false;
     let mut has_warnings = false;
     let mut total_problems = 0;
 
-    for file in &yaml_files {
-        match linter.lint_file(file) {
+    for (file, result) in &lint_results {
+        match result {
             Ok(problems) => {
                 if !problems.is_empty() {
-                    let output = formatter.format_problems(&problems, &file.display().to_string());
+                    let output = formatter.format_problems(problems, &file.display().to_string());
                     print!("{}", output);
 
-                    for problem in &problems {
+                    for problem in problems {
                         match problem.level {
                             LintLevel::Error => has_errors = true,
                             LintLevel::Warning => has_warnings = true,
@@ -150,54 +167,81 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// Minimal per-file summary collected from the parallel fix phase.
+struct FixFileSummary {
+    has_fixes: bool,
+    fixes_applied: usize,
+    fix_rule_summary: Vec<String>,
+    has_unfixable: bool,
+}
+
 /// Run in fix mode
-#[allow(clippy::collapsible_if)] // Nested ifs required for MSRV 1.85 compatibility
 fn run_fix_mode(cli: &Cli, config: &Config, yaml_files: &[PathBuf]) -> Result<()> {
     let registry = config.create_registry();
     let fixer = Fixer::new(&registry);
+
+    let is_dry_run = cli.dry_run;
+
+    // Process files in parallel.
+    // Fixed content is written to disk immediately inside the parallel phase so
+    // the full content of every file is never held in memory simultaneously.
+    type FixEntry = (PathBuf, anyhow::Result<FixFileSummary>);
+    let fix_results: Vec<FixEntry> = yaml_files
+        .par_iter()
+        .map(|file| {
+            let result = (|| -> anyhow::Result<FixFileSummary> {
+                let content = fs::read_to_string(file)
+                    .with_context(|| format!("Failed to read {}", file.display()))?;
+                let fix_result = fixer.fix(&file.display().to_string(), &content);
+
+                // Write fixed content immediately to avoid holding all file contents in
+                // memory at once (only in non-dry-run mode).
+                #[allow(clippy::collapsible_if)] // Nested ifs required for MSRV 1.85 compatibility
+                if !is_dry_run {
+                    if let Some(fixed_content) = &fix_result.fixed_content {
+                        fs::write(file, fixed_content)
+                            .with_context(|| format!("Failed to write {}", file.display()))?;
+                    }
+                }
+
+                Ok(FixFileSummary {
+                    has_fixes: fix_result.has_fixes(),
+                    fixes_applied: fix_result.fixes_applied,
+                    fix_rule_summary: fix_result
+                        .fixes_by_rule
+                        .iter()
+                        .map(|(rule, count)| format!("{}: {}", rule, count))
+                        .collect(),
+                    has_unfixable: fix_result.has_unfixable(),
+                })
+            })();
+            (file.clone(), result)
+        })
+        .collect();
 
     let mut total_fixed = 0;
     let mut files_fixed = 0;
     let mut files_with_unfixable = 0;
 
-    let is_dry_run = cli.dry_run;
+    // Print results in deterministic file order
+    for (file, result) in fix_results {
+        let summary = result.with_context(|| format!("Failed to process {}", file.display()))?;
 
-    for file in yaml_files {
-        let content = fs::read_to_string(file)
-            .with_context(|| format!("Failed to read {}", file.display()))?;
-
-        let result = fixer.fix(&file.display().to_string(), &content);
-
-        if result.has_fixes() {
+        if summary.has_fixes {
             files_fixed += 1;
-            total_fixed += result.fixes_applied;
-
-            // Format fix summary for this file
-            let fix_summary: Vec<String> = result
-                .fixes_by_rule
-                .iter()
-                .map(|(rule, count)| format!("{}: {}", rule, count))
-                .collect();
+            total_fixed += summary.fixes_applied;
 
             let action = if is_dry_run { "would fix" } else { "fixed" };
             println!(
                 "{}: {} {} issue(s) ({})",
                 file.display(),
                 action,
-                result.fixes_applied,
-                fix_summary.join(", ")
+                summary.fixes_applied,
+                summary.fix_rule_summary.join(", ")
             );
-
-            // Write fixed content (only in non-dry-run mode)
-            if !is_dry_run {
-                if let Some(fixed_content) = &result.fixed_content {
-                    fs::write(file, fixed_content)
-                        .with_context(|| format!("Failed to write {}", file.display()))?;
-                }
-            }
         }
 
-        if result.has_unfixable() {
+        if summary.has_unfixable {
             files_with_unfixable += 1;
         }
     }
@@ -218,6 +262,20 @@ fn run_fix_mode(cli: &Cli, config: &Config, yaml_files: &[PathBuf]) -> Result<()
         std::process::exit(1);
     }
 
+    Ok(())
+}
+
+/// Configure rayon thread pool size
+///
+/// `jobs == 0` means auto-detect (use rayon default, which uses all logical CPUs).
+/// `jobs >= 1` sets an explicit thread count.
+fn configure_thread_pool(jobs: usize) -> Result<()> {
+    if jobs > 0 {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(jobs)
+            .build_global()
+            .context("Failed to configure thread pool")?;
+    }
     Ok(())
 }
 
