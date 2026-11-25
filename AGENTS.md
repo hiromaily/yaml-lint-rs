@@ -1,73 +1,42 @@
-# Agent Instructions
+# Agent instructions for yaml-lint-rs
 
-This document provides guidance for AI coding assistants working on yaml-lint-rs.
+yaml-lint-rs is a Rust YAML linter inspired by Python yamllint. The workspace uses Rust edition 2024. CI checks Rust 1.85 compatibility, so keep new code and dependencies compatible with that version.
 
-## Project Overview
+## Where to work
 
-- **Purpose**: Fast YAML linter written in Rust, inspired by Python yamllint
-- **Language**: Rust (edition 2024)
-- **Structure**: Cargo workspace with `core` (library) and `cli` (binary) crates
+| Task | Entry points |
+| --- | --- |
+| CLI arguments, file discovery, exit codes | [cli/src/main.rs](cli/src/main.rs) in the `yaml-lint` package |
+| Library API and lint orchestration | [lib.rs](core/src/lib.rs), [linter.rs](core/src/linter.rs) in the `yaml-lint-core` package |
+| Config discovery, presets, options, configured registry | [config.rs](core/src/config.rs) |
+| Rule trait, context, and default registry | [rules/mod.rs](core/src/rules/mod.rs) |
+| Diagnostics, output, and auto-fix | [problem.rs](core/src/problem.rs), [output/](core/src/output/), [fixer.rs](core/src/fixer.rs) |
+| Integration tests and fixtures | [core/tests/](core/tests/), [tests/fixtures/](tests/fixtures/) |
 
-## Architecture
+Use `yaml-rust2` for YAML parsing and the existing Serde code for config deserialization. Use `thiserror` for library error types and `?` to propagate errors. Follow rustfmt and Clippy, keep functions focused, and document public APIs with doc comments. Put unit tests alongside the code they exercise.
 
-```
-yaml-lint-rs/
-├── core/                 # Library crate
-│   └── src/
-│       ├── lib.rs        # Public API
-│       ├── config.rs     # Configuration system
-│       ├── linter.rs     # Main orchestration
-│       ├── problem.rs    # LintProblem type
-│       ├── rules/        # Rule implementations
-│       └── output/       # Output formatters
-├── cli/                  # Binary crate
-│   └── src/main.rs       # CLI entry point
-└── tests/                # Integration tests
-```
+## Development checks
 
-## Key Commands (Makefile)
+Run these commands from the repository root.
 
-### CI Commands (run before commit)
-```bash
-make ci          # Run all CI checks (fmt-check + lint + test)
-make fmt-check   # Check formatting (same as CI)
-make lint        # Run clippy (same as CI)
-make test        # Run all tests (same as CI)
-```
+| Command | Purpose |
+| --- | --- |
+| `make build` | Build the debug CLI |
+| `make fmt` | Format Rust code |
+| `make test-one TEST=test_name` | Run tests matching a name |
+| `cargo test -p yaml-lint-core --test config_options` | Run rule configuration integration tests |
+| `cargo run -p yaml-lint -- --help` | Inspect the CLI |
+| `make ci` | Run formatting checks, Clippy with warnings denied, and workspace tests before committing |
+| `make validate-fixtures` | Build the release CLI and check that the valid fixture directory passes and the invalid directory fails |
+| `make validate-fixtures-detail` | Print per-file fixture results |
 
-### Development
-```bash
-make build       # Build debug version
-make release     # Build release version
-make fmt         # Format code
-make clean       # Clean build artifacts
-make help        # Show all available targets
-```
+`make help` lists the available targets. See [GitHub Actions CI](.github/workflows/ci.yml) for additional build, release-mode test, and MSRV checks. Use `--dry-run` or copies of fixtures when exercising auto-fix.
 
-### Fixture Validation
-```bash
-make validate-fixtures        # Validate test fixtures
-make validate-fixtures-detail # Detailed validation
-```
+## Codex skills
 
-## Adding New Rules
+Use these repository skills from the repository root. In Codex, enter the skill name with `$` followed by the task details.
 
-1. Create `core/src/rules/<rule_name>.rs`
-2. Implement `Rule` trait (see existing rules for examples)
-3. Register in `core/src/rules/mod.rs`
-4. Add to presets in `core/src/config.rs`
-5. Add tests in the rule file and `tests/`
-
-## Code Style
-
-- Follow Rust idioms and clippy suggestions
-- Use `thiserror` for error types
-- Prefer `Vec<LintProblem>` return type for rule checks
-- Keep functions small and focused
-- Add doc comments for public APIs
-
-## Documentation
-
-- `docs/RULES.md` - Rule documentation
-- `docs/USAGE.md` - Usage guide
-- `README.md` - Project overview
+| Task | Invocation |
+| --- | --- |
+| Add or update a lint rule | [`$adding-rule-validation`](.agents/skills/adding-rule-validation/SKILL.md) |
+| Draft or create a GitHub issue | [`$create-issue`](.agents/skills/create-issue/SKILL.md) |
