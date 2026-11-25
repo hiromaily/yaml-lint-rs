@@ -3,23 +3,96 @@ name: CI
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
 jobs:
+  changes:
+    name: Detect CI inputs
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read
+    outputs:
+      rust: ${{ steps.paths.outputs.rust }}
+      format: ${{ steps.paths.outputs.format }}
+      clippy: ${{ steps.paths.outputs.clippy }}
+      test: ${{ steps.paths.outputs.test }}
+      build: ${{ steps.paths.outputs.build }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Match changed files to jobs
+        id: paths
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # Compare the checked-out PR merge commit or push head to its base.
+          # Treat a missing push base as a full change, e.g. after a force push.
+          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            BASE_SHA=$(git hash-object -w -t tree --stdin </dev/null)
+          fi
+
+          changed_files=$(mktemp)
+          trap 'rm -f "$changed_files"' EXIT
+          # Treat moves as a removal and an addition so both paths are checked.
+          git diff --name-only --no-renames -z "$BASE_SHA" HEAD -- > "$changed_files"
+
+          rust=false
+          format=false
+          clippy=false
+          test=false
+          build=false
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              .github/workflows/ci.yml|Cargo.toml|Cargo.lock|cli/Cargo.toml|core/Cargo.toml|\
+              .cargo/config|.cargo/config.toml|rust-toolchain|rust-toolchain.toml|\
+              cli/build.rs|core/build.rs|cli/src/*.rs|core/src/*.rs)
+                rust=true
+                build=true
+                ;;
+              cli/tests/*.rs|core/tests/*.rs|cli/examples/*.rs|core/examples/*.rs|cli/benches/*.rs|core/benches/*.rs)
+                rust=true
+                ;;
+              rustfmt.toml|.rustfmt.toml|cli/rustfmt.toml|cli/.rustfmt.toml|core/rustfmt.toml|core/.rustfmt.toml)
+                format=true
+                ;;
+              clippy.toml|.clippy.toml|cli/clippy.toml|cli/.clippy.toml|core/clippy.toml|core/.clippy.toml)
+                clippy=true
+                ;;
+              tests/fixtures/valid/*.yaml|tests/fixtures/valid/*.yml|tests/fixtures/valid/.yamllint|\
+              tests/fixtures/invalid/*.yaml|tests/fixtures/invalid/*.yml|tests/fixtures/invalid/.yamllint|\
+              tests/fixtures/valid/*/.yamllint|tests/fixtures/invalid/*/.yamllint)
+                test=true
+                build=true
+                ;;
+              .yamllint|.yamllint.yml|.yamllint.yaml)
+                build=true
+                ;;
+            esac
+          done < "$changed_files"
+
+          if [[ "$rust" == true ]]; then
+            format=true
+            clippy=true
+            test=true
+          fi
+          printf '%s\n' "rust=$rust" "format=$format" "clippy=$clippy" "test=$test" "build=$build" >> "$GITHUB_OUTPUT"
+
   # ===========================================================================
   # Lint - Check code quality
   # ===========================================================================
   lint:
     name: Lint
+    needs: changes
+    if: needs.changes.outputs.format == 'true' || needs.changes.outputs.clippy == 'true'
     runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v6
@@ -30,6 +103,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache cargo registry
+        if: needs.changes.outputs.clippy == 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -41,9 +115,11 @@ jobs:
             ${{ runner.os }}-cargo-lint-
 
       - name: Check formatting
+        if: needs.changes.outputs.format == 'true'
         run: cargo fmt --all -- --check
 
       - name: Run clippy
+        if: needs.changes.outputs.clippy == 'true'
         run: cargo clippy --all-targets --all-features -- -D warnings
 
   # ===========================================================================
@@ -51,6 +127,8 @@ jobs:
   # ===========================================================================
   test:
     name: Test (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.test == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -86,7 +164,8 @@ jobs:
   build:
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    needs: [lint, test]
+    needs: [changes, lint, test]
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.build == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -131,6 +210,8 @@ jobs:
   # ===========================================================================
   check:
     name: Check
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v6
@@ -157,6 +238,8 @@ jobs:
   # ===========================================================================
   msrv:
     name: MSRV (1.100)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v6
