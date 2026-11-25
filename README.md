@@ -291,7 +291,7 @@ key: |
 
 Contributions are welcome! Please feel free to submit issues or pull requests.
 
-See [AGENTS.md](AGENTS.md) for the development workflow, CI checks, and steps for adding lint rules.
+See [AGENTS.md](AGENTS.md) for the development workflow, CI checks, and Codex skills for lint rules and GitHub issues.
 
 ## License
 
