@@ -291,6 +291,8 @@ key: |
 
 Contributions are welcome! Please feel free to submit issues or pull requests.
 
+See [AGENTS.md](AGENTS.md) for the development workflow, CI checks, and steps for adding lint rules.
+
 ## License
 
 MIT
