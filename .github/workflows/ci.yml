@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-slim
     permissions:
       contents: read
+      pull-requests: read
     outputs:
       rust: ${{ steps.paths.outputs.rust }}
       format: ${{ steps.paths.outputs.format }}
@@ -29,62 +30,40 @@ jobs:
           persist-credentials: false
 
       - name: Match changed files to jobs
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: paths
-        shell: bash
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          # Compare the checked-out PR merge commit or push head to its base.
-          # Treat a missing push base as a full change, e.g. after a force push.
-          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
-            BASE_SHA=$(git hash-object -w -t tree --stdin </dev/null)
-          fi
-
-          changed_files=$(mktemp)
-          trap 'rm -f "$changed_files"' EXIT
-          # Treat moves as a removal and an addition so both paths are checked.
-          git diff --name-only --no-renames -z "$BASE_SHA" HEAD -- > "$changed_files"
-
-          rust=false
-          format=false
-          clippy=false
-          test=false
-          build=false
-          while IFS= read -r -d '' path; do
-            case "$path" in
-              .github/workflows/ci.yml|Cargo.toml|Cargo.lock|cli/Cargo.toml|core/Cargo.toml|\
-              .cargo/config|.cargo/config.toml|rust-toolchain|rust-toolchain.toml|\
-              cli/build.rs|core/build.rs|cli/src/*.rs|core/src/*.rs)
-                rust=true
-                build=true
-                ;;
-              cli/tests/*.rs|core/tests/*.rs|cli/examples/*.rs|core/examples/*.rs|cli/benches/*.rs|core/benches/*.rs)
-                rust=true
-                ;;
-              rustfmt.toml|.rustfmt.toml|cli/rustfmt.toml|cli/.rustfmt.toml|core/rustfmt.toml|core/.rustfmt.toml)
-                format=true
-                ;;
-              clippy.toml|.clippy.toml|cli/clippy.toml|cli/.clippy.toml|core/clippy.toml|core/.clippy.toml)
-                clippy=true
-                ;;
-              tests/fixtures/valid/*.yaml|tests/fixtures/valid/*.yml|tests/fixtures/valid/.yamllint|\
-              tests/fixtures/invalid/*.yaml|tests/fixtures/invalid/*.yml|tests/fixtures/invalid/.yamllint|\
-              tests/fixtures/valid/*/.yamllint|tests/fixtures/invalid/*/.yamllint)
-                test=true
-                build=true
-                ;;
-              .yamllint|.yamllint.yml|.yamllint.yaml)
-                build=true
-                ;;
-            esac
-          done < "$changed_files"
-
-          if [[ "$rust" == true ]]; then
-            format=true
-            clippy=true
-            test=true
-          fi
-          printf '%s\n' "rust=$rust" "format=$format" "clippy=$clippy" "test=$test" "build=$build" >> "$GITHUB_OUTPUT"
+        with:
+          base: ${{ github.event_name == 'push' && github.ref || '' }}
+          filters: |
+            production: &production
+              - '.github/workflows/ci.yml'
+              - 'Cargo.{toml,lock}'
+              - '{cli,core}/Cargo.toml'
+              - '.cargo/config{,.toml}'
+              - 'rust-toolchain{,.toml}'
+              - '{cli,core}/build.rs'
+              - '{cli,core}/src/**/*.rs'
+            rust: &rust
+              - *production
+              - '{cli,core}/{tests,examples,benches}/**/*.rs'
+            fixtures: &fixtures
+              - 'tests/fixtures/{valid,invalid}/**/*.{yaml,yml}'
+              - 'tests/fixtures/{valid,invalid}/**/.yamllint'
+            format:
+              - *rust
+              - '{rustfmt,.rustfmt}.toml'
+              - '{cli,core}/{rustfmt,.rustfmt}.toml'
+            clippy:
+              - *rust
+              - '{clippy,.clippy}.toml'
+              - '{cli,core}/{clippy,.clippy}.toml'
+            test:
+              - *rust
+              - *fixtures
+            build:
+              - *production
+              - *fixtures
+              - '.yamllint{,.yml,.yaml}'
 
   # ===========================================================================
   # Lint - Check code quality
