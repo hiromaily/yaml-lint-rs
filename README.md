@@ -52,7 +52,7 @@ brew install yaml-lint
 
 ### From Source
 
-Requires Rust 1.85+ (install from [rustup.rs](https://rustup.rs/)):
+Requires Rust 1.100+ (install from [rustup.rs](https://rustup.rs/)):
 
 ```bash
 git clone https://github.com/hiromaily/yaml-lint-rs.git

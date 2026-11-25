@@ -40,7 +40,7 @@ cargo build --release
 
 ### System Requirements
 
-- Rust 1.85 or later (Edition 2024) - only for building from source
+- Rust 1.100 or later (Edition 2024) - only for building from source
 - Works on Linux, macOS, and Windows
 
 ## Basic Usage

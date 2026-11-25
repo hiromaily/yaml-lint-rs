@@ -18,11 +18,10 @@ path = "src/main.rs"
 [dependencies]
 yaml-lint-core = { version = "0.2.0", path = "../core" }
 clap = { version = "4.5", features = ["derive", "cargo"] }
-colored = "2.1"
+colored = "3.1.1"
 anyhow = "1.0"
 walkdir = "2.5"
-# 0.4.30 uses let chains without declaring a newer MSRV.
-ignore = ">=0.4, <0.4.30"
+ignore = "0.4.35"
 is-terminal = "0.4.17"
 rayon.workspace = true
 

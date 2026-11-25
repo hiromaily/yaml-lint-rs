@@ -98,7 +98,6 @@ impl Rule for CommentsRule {
         "comments"
     }
 
-    #[allow(clippy::collapsible_if)] // Nested ifs required for MSRV 1.85 compatibility
     fn check(&self, context: &LintContext) -> Vec<LintProblem> {
         let mut problems = Vec::new();
 
@@ -128,16 +127,19 @@ impl Rule for CommentsRule {
                 let char_after_hash = after_hash.chars().nth(1);
                 // Allow empty comments (just #) and comments starting with space
                 // Also allow ## for section headers, #! for shebangs in non-first lines
-                if let Some(ch) = char_after_hash {
-                    if ch != ' ' && ch != '#' && ch != '!' && ch != '\t' {
-                        problems.push(LintProblem::new(
-                            line_num,
-                            comment_start + 2, // Position after #
-                            "missing space after comment marker (#)",
-                            self.name(),
-                            LintLevel::Error,
-                        ));
-                    }
+                if let Some(ch) = char_after_hash
+                    && ch != ' '
+                    && ch != '#'
+                    && ch != '!'
+                    && ch != '\t'
+                {
+                    problems.push(LintProblem::new(
+                        line_num,
+                        comment_start + 2, // Position after #
+                        "missing space after comment marker (#)",
+                        self.name(),
+                        LintLevel::Error,
+                    ));
                 }
             }
 
@@ -176,7 +178,6 @@ impl Rule for CommentsRule {
         true
     }
 
-    #[allow(clippy::collapsible_if)] // Nested ifs required for MSRV 1.85 compatibility
     fn fix(&self, content: &str, _problem: &LintProblem) -> Option<String> {
         let lines: Vec<&str> = content.lines().collect();
         let mut result_lines: Vec<String> = Vec::new();
@@ -204,14 +205,17 @@ impl Rule for CommentsRule {
                 // Fix space after #
                 if self.require_starting_space && after_hash.len() > 1 {
                     let char_after_hash = after_hash.chars().nth(1);
-                    if let Some(ch) = char_after_hash {
-                        if ch != ' ' && ch != '#' && ch != '!' && ch != '\t' {
-                            // Insert space after #
-                            let before = &line[..comment_start + 1];
-                            let after = &line[comment_start + 1..];
-                            fixed_line = format!("{} {}", before, after);
-                            made_changes = true;
-                        }
+                    if let Some(ch) = char_after_hash
+                        && ch != ' '
+                        && ch != '#'
+                        && ch != '!'
+                        && ch != '\t'
+                    {
+                        // Insert space after #
+                        let before = &line[..comment_start + 1];
+                        let after = &line[comment_start + 1..];
+                        fixed_line = format!("{} {}", before, after);
+                        made_changes = true;
                     }
                 }
 
