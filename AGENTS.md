@@ -1,6 +1,6 @@
 # Agent instructions for yaml-lint-rs
 
-yaml-lint-rs is a Rust YAML linter inspired by Python yamllint. The workspace uses Rust edition 2024. CI checks Rust 1.85 compatibility, so keep new code and dependencies compatible with that version.
+yaml-lint-rs is a Rust YAML linter inspired by Python yamllint. The workspace uses Rust edition 2024. CI checks Rust 1.100 compatibility, so keep new code and dependencies compatible with that version.
 
 ## Where to work
 

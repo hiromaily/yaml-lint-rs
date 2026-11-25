@@ -190,7 +190,7 @@ yaml-lint-rs/
 
 ### Prerequisites
 
-- Rust 1.85+ (Edition 2024, install from https://rustup.rs/)
+- Rust 1.100+ (Edition 2024, install from https://rustup.rs/)
 
 ### Build Commands
 

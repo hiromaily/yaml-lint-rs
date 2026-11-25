@@ -196,12 +196,9 @@ fn run_fix_mode(cli: &Cli, config: &Config, yaml_files: &[PathBuf]) -> Result<()
 
                 // Write fixed content immediately to avoid holding all file contents in
                 // memory at once (only in non-dry-run mode).
-                #[allow(clippy::collapsible_if)] // Nested ifs required for MSRV 1.85 compatibility
-                if !is_dry_run {
-                    if let Some(fixed_content) = &fix_result.fixed_content {
-                        fs::write(file, fixed_content)
-                            .with_context(|| format!("Failed to write {}", file.display()))?;
-                    }
+                if !is_dry_run && let Some(fixed_content) = &fix_result.fixed_content {
+                    fs::write(file, fixed_content)
+                        .with_context(|| format!("Failed to write {}", file.display()))?;
                 }
 
                 Ok(FixFileSummary {
