@@ -105,14 +105,10 @@ jobs:
   # Test - Run all tests
   # ===========================================================================
   test:
-    name: Test (${{ matrix.os }})
+    name: Test (ubuntu-slim)
     needs: changes
     if: needs.changes.outputs.test == 'true'
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-slim, macos-latest]
+    runs-on: ubuntu-slim
 
     steps:
       - uses: actions/checkout@v6
@@ -141,14 +137,10 @@ jobs:
   # Build - Build and verify binary
   # ===========================================================================
   build:
-    name: Build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: Build (ubuntu-slim)
+    runs-on: ubuntu-slim
     needs: [changes, lint, test]
     if: ${{ !cancelled() && !failure() && needs.changes.outputs.build == 'true' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-slim, macos-latest]
 
     steps:
       - uses: actions/checkout@v6
