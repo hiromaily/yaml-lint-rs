@@ -11,11 +11,67 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  changes:
+    name: Detect CI inputs
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rust: ${{ steps.paths.outputs.rust }}
+      format: ${{ steps.paths.outputs.format }}
+      clippy: ${{ steps.paths.outputs.clippy }}
+      test: ${{ steps.paths.outputs.test }}
+      build: ${{ steps.paths.outputs.build }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Match changed files to jobs
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: paths
+        with:
+          base: ${{ github.event_name == 'push' && github.ref || '' }}
+          filters: |
+            production: &production
+              - '.github/workflows/ci.yml'
+              - 'Cargo.{toml,lock}'
+              - '{cli,core}/Cargo.toml'
+              - '.cargo/config{,.toml}'
+              - 'rust-toolchain{,.toml}'
+              - '{cli,core}/build.rs'
+              - '{cli,core}/src/**/*.rs'
+            rust: &rust
+              - *production
+              - '{cli,core}/{tests,examples,benches}/**/*.rs'
+            fixtures: &fixtures
+              - 'tests/fixtures/{valid,invalid}/**/*.{yaml,yml}'
+              - 'tests/fixtures/{valid,invalid}/**/.yamllint'
+            format:
+              - *rust
+              - '{rustfmt,.rustfmt}.toml'
+              - '{cli,core}/{rustfmt,.rustfmt}.toml'
+            clippy:
+              - *rust
+              - '{clippy,.clippy}.toml'
+              - '{cli,core}/{clippy,.clippy}.toml'
+            test:
+              - *rust
+              - *fixtures
+            build:
+              - *production
+              - *fixtures
+              - '.yamllint{,.yml,.yaml}'
+
   # ===========================================================================
   # Lint - Check code quality
   # ===========================================================================
   lint:
     name: Lint
+    needs: changes
+    if: needs.changes.outputs.format == 'true' || needs.changes.outputs.clippy == 'true'
     runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v6
@@ -26,6 +82,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache cargo registry
+        if: needs.changes.outputs.clippy == 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -37,21 +94,21 @@ jobs:
             ${{ runner.os }}-cargo-lint-
 
       - name: Check formatting
+        if: needs.changes.outputs.format == 'true'
         run: cargo fmt --all -- --check
 
       - name: Run clippy
+        if: needs.changes.outputs.clippy == 'true'
         run: cargo clippy --all-targets --all-features -- -D warnings
 
   # ===========================================================================
   # Test - Run all tests
   # ===========================================================================
   test:
-    name: Test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-slim, macos-latest]
+    name: Test (ubuntu-slim)
+    needs: changes
+    if: needs.changes.outputs.test == 'true'
+    runs-on: ubuntu-slim
 
     steps:
       - uses: actions/checkout@v6
@@ -80,13 +137,10 @@ jobs:
   # Build - Build and verify binary
   # ===========================================================================
   build:
-    name: Build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    needs: [lint, test]
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-slim, macos-latest]
+    name: Build (ubuntu-slim)
+    runs-on: ubuntu-slim
+    needs: [changes, lint, test]
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.build == 'true' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -127,6 +181,8 @@ jobs:
   # ===========================================================================
   check:
     name: Check
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v6
@@ -153,6 +209,8 @@ jobs:
   # ===========================================================================
   msrv:
     name: MSRV (1.100)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v6
