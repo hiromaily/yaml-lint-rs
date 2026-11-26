@@ -305,3 +305,16 @@ fn test_fix_fixture_file() {
         }
     }
 }
+
+#[test]
+fn test_new_lines_detects_crlf_in_a_file() {
+    let problems = Linter::with_defaults()
+        .lint_file(&fixture_path("invalid/new-lines.yaml"))
+        .unwrap();
+    let positions: Vec<_> = problems
+        .iter()
+        .filter(|problem| problem.rule == "new-lines")
+        .map(|problem| (problem.line, problem.column, problem.level))
+        .collect();
+    assert_eq!(positions, [(1, 11, yaml_lint_core::LintLevel::Error)]);
+}

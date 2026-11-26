@@ -1,0 +1,1 @@
+/tests/fixtures/invalid/new-lines.yaml -text whitespace=cr-at-eol

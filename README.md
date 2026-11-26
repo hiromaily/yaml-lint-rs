@@ -263,11 +263,16 @@ ignore: |
     - Level: Warning
     - Options: `allowed-values`, `check-keys`
 
+### Phase 2
+
+- **braces** and **brackets** enforce spacing inside flow mappings and sequences.
+- **new-lines** enforces the configured line ending style (`unix`, `dos`, or `platform`).
+  Both presets expect LF by default.
+
 ### 📋 Future Rules
 
 Additional rules planned for full yamllint compatibility:
-- new-lines, empty-values
-- braces, brackets, commas
+- empty-values, commas, anchors
 - comments-indentation, document-end
 - float-values, octal-values, quoted-strings, key-ordering
 

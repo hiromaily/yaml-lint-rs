@@ -1,7 +1,7 @@
 //! Configuration system for the linter
 
 use crate::Result;
-use crate::rules::RuleLevel;
+use crate::rules::{RuleLevel, new_lines::NewLineType};
 use indexmap::IndexMap;
 use std::path::Path;
 
@@ -47,6 +47,9 @@ pub enum RuleOptions {
     Colons {
         max_spaces_before: usize,
         max_spaces_after: usize,
+    },
+    NewLines {
+        newline_type: NewLineType,
     },
     EmptyLines {
         max: usize,
@@ -135,6 +138,7 @@ impl Config {
             ("key-duplicates", RuleLevel::Error),
             ("indentation", RuleLevel::Error),
             ("new-line-at-end-of-file", RuleLevel::Error),
+            ("new-lines", RuleLevel::Error),
             ("empty-lines", RuleLevel::Error),
             ("hyphens", RuleLevel::Error),
             ("comments", RuleLevel::Error),
@@ -165,6 +169,7 @@ impl Config {
             ("key-duplicates", RuleLevel::Error),
             ("indentation", RuleLevel::Warning),
             ("new-line-at-end-of-file", RuleLevel::Warning),
+            ("new-lines", RuleLevel::Warning),
             ("empty-lines", RuleLevel::Warning),
             ("hyphens", RuleLevel::Warning),
             ("comments", RuleLevel::Warning),
@@ -194,6 +199,7 @@ impl Config {
             "line-length" => Self::parse_line_length_options(map),
             "indentation" => Self::parse_indentation_options(map),
             "colons" => Self::parse_colons_options(map),
+            "new-lines" => Self::parse_new_lines_options(map),
             "empty-lines" => Self::parse_empty_lines_options(map),
             "hyphens" => Self::parse_hyphens_options(map),
             "comments" => Self::parse_comments_options(map),
@@ -206,6 +212,25 @@ impl Config {
                 rule_name
             ))),
         }
+    }
+
+    /// Parse new-lines options
+    fn parse_new_lines_options(map: &serde_yaml::Mapping) -> Result<RuleOptions> {
+        let newline_type = match map.get("type") {
+            None => NewLineType::default(),
+            Some(value) => match value.as_str() {
+                Some("unix") => NewLineType::Unix,
+                Some("dos") => NewLineType::Dos,
+                Some("platform") => NewLineType::Platform,
+                _ => {
+                    return Err(crate::LintError::ConfigError(
+                        "new-lines 'type' must be unix, dos, or platform".to_string(),
+                    ));
+                }
+            },
+        };
+
+        Ok(RuleOptions::NewLines { newline_type })
     }
 
     /// Parse line-length options
@@ -668,6 +693,13 @@ impl Config {
                         Box::new(crate::rules::indentation::IndentationRule::new())
                     }
                 }
+                "new-lines" => construct_rule!(
+                    rule_config,
+                    RuleOptions::NewLines { newline_type } => crate::rules::new_lines::NewLinesRule {
+                        newline_type: *newline_type,
+                    },
+                    crate::rules::new_lines::NewLinesRule::default()
+                ),
                 "new-line-at-end-of-file" => {
                     construct_rule!(crate::rules::new_line_at_end_of_file::NewLineAtEndOfFileRule)
                 }

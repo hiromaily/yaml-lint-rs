@@ -137,7 +137,7 @@ Strict preset suitable for production:
 
 ```yaml
 extends: default
-# All rules enabled as errors except document-start (disabled)
+# document-start is disabled and truthy is a warning
 ```
 
 #### relaxed
@@ -148,6 +148,11 @@ More permissive preset:
 extends: relaxed
 # Most rules as warnings, key-duplicates as error
 ```
+
+### Line endings
+
+Both presets expect LF by default. Set `rules.new-lines.type` to `dos` for CRLF
+or `platform` to use the operating system's convention.
 
 ### Rule Levels
 

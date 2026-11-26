@@ -430,3 +430,27 @@ rules:
         "Error message should indicate boolean type required"
     );
 }
+
+#[test]
+fn test_new_lines_configuration() {
+    let config =
+        Config::load_from_str("rules:\n  new-lines: {type: dos, level: warning}\n").unwrap();
+    let linter = Linter::new(config);
+    assert!(linter.lint_string("key: value\r\n").unwrap().is_empty());
+    let problems = linter.lint_string("key: value\n").unwrap();
+    assert_eq!(problems.len(), 1);
+    assert_eq!(problems[0].rule, "new-lines");
+    assert_eq!(problems[0].level, yaml_lint_core::LintLevel::Warning);
+
+    for settings in ["error", "{level: error}", "{type: unix}"] {
+        let config = Config::load_from_str(&format!("rules:\n  new-lines: {settings}\n")).unwrap();
+        let linter = Linter::new(config);
+        assert!(linter.lint_string("key: value\n").unwrap().is_empty());
+        assert_eq!(linter.lint_string("key: value\r\n").unwrap().len(), 1);
+    }
+
+    for invalid in ["lf", "true", "null"] {
+        let config = format!("rules:\n  new-lines: {{type: {invalid}}}\n");
+        assert!(Config::load_from_str(&config).is_err());
+    }
+}
