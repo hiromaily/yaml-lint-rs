@@ -13,17 +13,17 @@
 - **License** MIT
 - **Author** Hiroki Yasui
 
-See [Cargo.toml](Cargo.toml) for the workspace settings and [CI](.github/workflows/ci.yml) for the compatibility check.
+See [Cargo.toml](../Cargo.toml) for the workspace settings and [CI](../.github/workflows/ci.yml) for the compatibility check.
 
 ## Architecture
 
-- [yaml-lint-core](core/src/lib.rs) provides the reusable linter, configuration, rule registry, diagnostics, auto-fix, and output formatters.
-- [yaml-lint](cli/src/main.rs) handles command-line arguments, file discovery, parallel execution, and exit codes.
-- Integration tests live in [core/tests](core/tests), and YAML fixtures live in [tests/fixtures](tests/fixtures).
+- [yaml-lint-core](../core/src/lib.rs) provides the reusable linter, configuration, rule registry, diagnostics, auto-fix, and output formatters.
+- [yaml-lint](../cli/src/main.rs) handles command-line arguments, file discovery, parallel execution, and exit codes.
+- Integration tests live in [core/tests](../core/tests), and YAML fixtures live in [tests/fixtures](../tests/fixtures).
 
 ## Implemented Features
 
-The [default rule registry](core/src/rules/mod.rs) includes:
+The [default rule registry](../core/src/rules/mod.rs) includes:
 
 - `trailing-spaces`, `line-length`, `document-start`, `colons`, `key-duplicates`, and `indentation`
 - `new-line-at-end-of-file`, `empty-lines`, `hyphens`, `comments`, and `truthy`
@@ -31,7 +31,7 @@ The [default rule registry](core/src/rules/mod.rs) includes:
 
 The CLI supports recursive linting of YAML files, parallel execution with `--jobs`, and standard, colored, and parsable output. Use `--fix` to correct trailing spaces, a missing final newline, or excess blank lines. Use `--dry-run` to preview those fixes.
 
-Configuration files support the `default` and `relaxed` presets, per-rule severity levels, and rule-specific options. See the [usage guide](docs/USAGE.md) and [rule documentation](docs/RULES.md).
+Configuration files support the `default` and `relaxed` presets, per-rule severity levels, and rule-specific options. See the [CLI and library guide](cli-and-library-guide.md) and [rule documentation](lint-rules.md).
 
 ## Build and Test
 

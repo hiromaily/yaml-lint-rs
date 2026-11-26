@@ -97,7 +97,7 @@ rules:
 - [ ] Core functionality implemented
 - [ ] Configuration options work
 - [ ] Unit tests added
-- [ ] Documentation updated in docs/RULES.md or docs/USAGE.md
+- [ ] Documentation updated in docs/lint-rules.md or docs/cli-and-library-guide.md
 - [ ] Added to presets in config.rs
 
 ## Priority
