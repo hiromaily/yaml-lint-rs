@@ -481,10 +481,11 @@ the style configured by `new-lines` when that rule is enabled.
 
 ### default (strict)
 
-All rules enabled as errors, except:
+Most enabled rules are errors. The exceptions and disabled rules are:
 
 - `document-start`: disabled
-- `truthy`: warning
+- `truthy` and `comments-indentation`: warning
+- `document-end`, `empty-values`, `float-values`, `key-ordering`, `octal-values`, and `quoted-strings`: disabled
 
 Suitable for production code.
 
@@ -504,31 +505,38 @@ Most rules as warnings:
 - `truthy`: warning
 - `braces`: warning
 - `brackets`: warning
-- `key-duplicates`: error (kept as error)
-- `document-start`: disabled
+- `commas`: warning
+- `anchors` and `key-duplicates`: error
+- `comments-indentation`, `document-start`, `document-end`, `empty-values`, `float-values`, `key-ordering`, `octal-values`, and `quoted-strings`: disabled
 
 More permissive for development and experimentation.
 
-## Future Rules (Planned)
+## Phase 3 rules
 
-The following rules are planned for future releases:
+These rules report diagnostics. Each can be explicitly enabled with `enable`
+or a settings mapping such as `{}`.
 
-### comments-indentation
-Enforce that comments are indented like content.
+| Rule | Default preset | Relaxed preset | Options when enabled |
+| --- | --- | --- | --- |
+| `anchors` | Error | Error | `forbid-undeclared-aliases` defaults to true. `forbid-duplicated-anchors` and `forbid-unused-anchors` default to false. Anchor scope is per YAML document. |
+| `commas` | Error | Warning | `max-spaces-before` defaults to 0. `min-spaces-after` and `max-spaces-after` default to 1. Use -1 to turn off a spacing limit. |
+| `comments-indentation` | Warning | Disabled | Checks standalone comment indentation. |
+| `document-end` | Disabled | Disabled | `present` defaults to true to require `...` at the end of each document. Use false to forbid it. |
+| `empty-values` | Disabled | Disabled | `forbid-in-block-mappings`, `forbid-in-flow-mappings`, and `forbid-in-block-sequences` default to true. Explicit nulls and quoted empty strings are accepted. |
+| `float-values` | Disabled | Disabled | `require-numeral-before-decimal`, `forbid-scientific-notation`, `forbid-nan`, and `forbid-inf` default to false. |
+| `key-ordering` | Disabled | Disabled | `ignored-keys` is a list of regex patterns and defaults to an empty list. Keys are ordered by Unicode code point. |
+| `octal-values` | Disabled | Disabled | `forbid-implicit-octal` and `forbid-explicit-octal` default to true. |
+| `quoted-strings` | Disabled | Disabled | `quote-type` defaults to `any` and also accepts `single`, `double`, or `consistent`. `required` defaults to true and also accepts false or `only-when-needed`. |
 
-### document-end
-Require or forbid `...` document end marker.
+For `quoted-strings`, set `check-keys` to true to include mapping keys, or
+`allow-quoted-quotes` to true to allow the other quote style when it avoids
+escaping a quote in the value. Both options default to false. Use
+`extra-required` with `required: false` or `required: only-when-needed` to
+require quotes on matching strings. Use `extra-allowed` with
+`required: only-when-needed` to allow quotes on matching strings.
 
-### quoted-strings
-Manage quote usage (single vs double quotes, when to quote).
-
-### float-values / octal-values
-Prevent problematic number representations.
-
-### key-ordering
-Enforce alphabetical key sorting.
-
-And more for full yamllint compatibility (23 rules total).
+Pattern options use Rust regex syntax. Locale-aware collation and PCRE-only
+patterns remain compatibility gaps.
 
 ## Custom Rules
 

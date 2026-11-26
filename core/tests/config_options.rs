@@ -454,3 +454,103 @@ fn test_new_lines_configuration() {
         assert!(Config::load_from_str(&config).is_err());
     }
 }
+
+#[test]
+fn phase_3_preset_levels_and_registration() {
+    use yaml_lint_core::{LintLevel, rules::RuleLevel};
+
+    let default = Config::with_default_preset();
+    let relaxed = Config::with_relaxed_preset();
+    assert_eq!(default.create_registry().rule_names().len(), 23);
+    assert_eq!(Config::new().create_registry().rule_names().len(), 23);
+    assert_eq!(
+        relaxed.get_rule_level("comments-indentation"),
+        Some(RuleLevel::Disable)
+    );
+    assert_eq!(
+        default.get_rule_level("quoted-strings"),
+        Some(RuleLevel::Disable)
+    );
+    let problems = Linter::new(relaxed).lint_string("x: [a,b]\n").unwrap();
+    assert_eq!(problems.len(), 1);
+    assert_eq!(problems[0].rule, "commas");
+    assert_eq!(problems[0].level, LintLevel::Warning);
+}
+
+#[test]
+fn phase_3_configured_options_and_yaml_boundaries() {
+    let cases: &[(&str, &str, &[usize])] = &[
+        (
+            "anchors: {forbid-unused-anchors: true, forbid-duplicated-anchors: true}",
+            "---\na: &same x\nb: *same\nc: &same z\n---\nd: *same\n",
+            &[4, 4, 6],
+        ),
+        (
+            "commas: {max-spaces-before: -1, min-spaces-after: 0, max-spaces-after: 1}",
+            "a: [\"1,2\" ,3,  4]\nb: |\n  [1,2]\n",
+            &[1],
+        ),
+        (
+            "comments-indentation: {}",
+            "a: |\n  literal\n    # scalar content\n  # scalar content\n# outside\nb: 1\n",
+            &[],
+        ),
+        (
+            "document-end: {present: false}",
+            "---\na: |\n  ...\n...\n---\nb: \"...\"\n",
+            &[4],
+        ),
+        (
+            "empty-values: {forbid-in-block-mappings: false}",
+            "a:\nb: {c: }\nd:\n  - # comment\n  - null\n  - ''\n",
+            &[2, 4],
+        ),
+        (
+            "float-values: {forbid-nan: true, forbid-scientific-notation: true, require-numeral-before-decimal: true}",
+            "a: -.5\nb: 1e3\nc: .NaN\nd: '.NaN'\ne: !!str 1e3\nf: 1.2\n",
+            &[1, 2, 3],
+        ),
+        (
+            "key-ordering: {ignored-keys: ['^ignore']}",
+            "z: {a: 1, b: 2}\nignore-me: 0\na: 1\nb: 2\n",
+            &[3, 4],
+        ),
+        (
+            "octal-values: {forbid-implicit-octal: false}",
+            "a: [012, 0o12, '0o13', !!str 0o14, 019, 0o18]\n",
+            &[1],
+        ),
+        (
+            "quoted-strings: {required: only-when-needed, quote-type: single, extra-required: ['^force'], extra-allowed: ['^ok']}",
+            "a: 'unused'\nb: 'ok'\nc: force-me\nd: 'false'\ne: plain\nf: \"123\"\ng: [',']\n",
+            &[1, 3, 6],
+        ),
+        (
+            "quoted-strings: {quote-type: consistent, check-keys: true}",
+            "---\n'a': 'value'\n\"b\": 'value'\n---\n\"c\": \"value\"\n",
+            &[3],
+        ),
+    ];
+    for &(rule, yaml, expected) in cases {
+        let config = Config::load_from_str(&format!("rules:\n  {rule}\n")).unwrap();
+        let problems = Linter::new(config).lint_string(yaml).unwrap();
+        let lines: Vec<_> = problems.iter().map(|problem| problem.line).collect();
+        assert_eq!(lines, expected, "{rule}: {problems:?}");
+    }
+}
+
+#[test]
+fn phase_3_invalid_configuration_is_reported() {
+    for rule in [
+        "anchors: {forbid-unused-anchors: 1}",
+        "commas: {min-spaces-aftr: 2}",
+        "key-ordering: {ignored-keys: ['[']}",
+        "quoted-strings: {required: never}",
+        "quoted-strings: {required: true, extra-allowed: [foo]}",
+    ] {
+        assert!(
+            Config::load_from_str(&format!("rules:\n  {rule}\n")).is_err(),
+            "{rule}"
+        );
+    }
+}

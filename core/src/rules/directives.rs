@@ -29,8 +29,32 @@ pub(super) fn lines_for_rule(content: &str, rule: &str) -> HashSet<usize> {
 }
 
 pub(super) fn collect(content: &str) -> impl Iterator<Item = Directive<'_>> {
+    comments(if content.contains("disable-line") {
+        content
+    } else {
+        ""
+    })
+    .filter_map(|(index, line, hash)| {
+        let mut words = line[hash + 1..].split_ascii_whitespace();
+        if words.next()? != "yamllint" || words.next()? != "disable-line" {
+            return None;
+        }
+        let rule = words.next()?.strip_prefix("rule:")?;
+        if rule.is_empty() || words.next().is_some() {
+            return None;
+        }
+        let standalone = line[..hash].trim().is_empty();
+        Some(Directive {
+            target: index + usize::from(standalone),
+            rule,
+            standalone,
+        })
+    })
+}
+
+pub(super) fn comments(content: &str) -> impl Iterator<Item = (usize, &str, usize)> {
     let mut excluded = content
-        .contains("disable-line")
+        .contains('#')
         .then(|| non_comment_ranges(content))
         .flatten()
         .map(|ranges| ranges.into_iter().peekable());
@@ -52,20 +76,7 @@ pub(super) fn collect(content: &str) -> impl Iterator<Item = Directive<'_>> {
                     .peek()
                     .is_some_and(|range| range.contains(&position))
             })?;
-            let mut words = line[hash + 1..].split_ascii_whitespace();
-            if words.next()? != "yamllint" || words.next()? != "disable-line" {
-                return None;
-            }
-            let rule = words.next()?.strip_prefix("rule:")?;
-            if rule.is_empty() || words.next().is_some() {
-                return None;
-            }
-            let standalone = line[..hash].trim().is_empty();
-            Some(Directive {
-                target: index + if standalone { 2 } else { 1 },
-                rule,
-                standalone,
-            })
+            Some((index + 1, line, hash))
         })
 }
 

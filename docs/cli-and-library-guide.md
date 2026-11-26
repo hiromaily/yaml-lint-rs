@@ -154,9 +154,23 @@ extends: relaxed
 Both presets expect LF by default. Set `rules.new-lines.type` to `dos` for CRLF
 or `platform` to use the operating system's convention.
 
+### Opt-in rules
+
+Add a rule to `rules` to enable it alongside the chosen preset. For example:
+
+```yaml
+extends: default
+rules:
+  document-end: enable
+  empty-values:
+    forbid-in-block-sequences: false
+```
+
+See the [rule reference](lint-rules.md#phase-3-rules) for settings and defaults.
+
 ### Rule Levels
 
-- `error`: Causes exit code 1
+- `error` or `enable`: Causes exit code 1
 - `warning`: Reported but doesn't fail (exit code 2 with `--strict`)
 - `disable`: Rule is not checked
 

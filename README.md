@@ -269,12 +269,20 @@ ignore: |
 - **new-lines** enforces the configured line ending style (`unix`, `dos`, or `platform`).
   Both presets expect LF by default.
 
-### 📋 Future Rules
+### Phase 3
 
-Additional rules planned for full yamllint compatibility:
-- empty-values, commas, anchors
-- comments-indentation, document-end
-- float-values, octal-values, quoted-strings, key-ordering
+- **anchors** checks anchor declarations and aliases.
+- **commas** checks spacing around flow collection separators.
+- **comments-indentation** aligns standalone comments with surrounding YAML.
+- **document-end** requires or forbids the `...` marker.
+- **empty-values** checks implicit nulls in mappings and block sequences.
+- **float-values** and **octal-values** restrict numerical notation.
+- **key-ordering** checks the order of mapping keys.
+- **quoted-strings** controls when and how strings are quoted.
+
+The registry covers all 23 yamllint rule names. See the
+[rule reference](docs/lint-rules.md#phase-3-rules) for options and compatibility
+details.
 
 ## Exit Codes
 
