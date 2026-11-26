@@ -43,17 +43,23 @@ impl Rule for TrailingSpacesRule {
     }
 
     fn fix(&self, content: &str, _problem: &LintProblem) -> Option<String> {
-        // Check if there's anything to fix to avoid unnecessary string allocation
-        if !content
-            .lines()
-            .any(|line| line.ends_with(' ') || line.ends_with('\t'))
+        let suppressed = super::directives::lines_for_rule(content, self.name());
+        let lines = content.lines().enumerate();
+        if !lines
+            .clone()
+            .any(|(index, line)| !suppressed.contains(&(index + 1)) && line.ends_with([' ', '\t']))
         {
             return None;
         }
 
-        let mut result = content
-            .lines()
-            .map(|line| line.trim_end())
+        let mut result = lines
+            .map(|(index, line)| {
+                if suppressed.contains(&(index + 1)) {
+                    line
+                } else {
+                    line.trim_end()
+                }
+            })
             .collect::<Vec<_>>()
             .join("\n");
 

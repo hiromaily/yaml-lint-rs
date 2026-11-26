@@ -59,13 +59,10 @@ impl<'a> Fixer<'a> {
     pub fn fix(&self, path: &str, content: &str) -> FixResult {
         let mut result = FixResult::new(path.to_string());
         let mut current_content = content.to_string();
-        let mut made_progress = true;
 
         // Iteratively fix problems until no more fixes can be applied
         // This handles cases where fixing one problem might reveal or affect others
-        while made_progress {
-            made_progress = false;
-
+        loop {
             let context = LintContext::new(current_content.clone());
             let problems = self.registry.check_all(&context);
 
@@ -75,6 +72,7 @@ impl<'a> Fixer<'a> {
 
             // Try to fix problems in order (sorted by line number)
             // This applies fixes top-to-bottom and avoids HashMap overhead
+            let mut made_progress = false;
             for problem in &problems {
                 if let Some(rule) = self.registry.get(&problem.rule)
                     && rule.is_fixable()
@@ -90,16 +88,10 @@ impl<'a> Fixer<'a> {
                     break; // Re-check all problems after each fix
                 }
             }
-        }
-
-        // Collect remaining unfixable problems
-        let context = LintContext::new(current_content.clone());
-        let remaining_problems = self.registry.check_all(&context);
-        for problem in remaining_problems {
-            if let Some(rule) = self.registry.get(&problem.rule)
-                && !rule.is_fixable()
-            {
-                result.unfixable_problems.push(problem);
+            if !made_progress {
+                // Some rules cannot safely fix every diagnostic in context.
+                result.unfixable_problems = problems;
+                break;
             }
         }
 
@@ -192,6 +184,62 @@ mod tests {
                 .unfixable_problems
                 .iter()
                 .any(|p| p.rule == "key-duplicates")
+        );
+    }
+}
+
+#[cfg(test)]
+mod directive_tests {
+    use super::*;
+
+    #[test]
+    fn fix_preserves_suppressed_trailing_spaces() {
+        let registry = RuleRegistry::with_defaults();
+        let yaml = "# yamllint disable-line rule:trailing-spaces\na: value   \nb: value   \n";
+        let result = Fixer::new(&registry).fix("test.yaml", yaml);
+        assert_eq!(
+            result.fixed_content.as_deref(),
+            Some("# yamllint disable-line rule:trailing-spaces\na: value   \nb: value\n")
+        );
+    }
+
+    #[test]
+    fn fix_preserves_suppressed_comment_spacing() {
+        let registry = RuleRegistry::with_defaults();
+        let yaml = "a: value # yamllint disable-line rule:comments\nb: value # comment\n";
+        let result = Fixer::new(&registry).fix("test.yaml", yaml);
+        assert_eq!(
+            result.fixed_content.as_deref(),
+            Some("a: value # yamllint disable-line rule:comments\nb: value  # comment\n")
+        );
+    }
+
+    #[test]
+    fn fix_preserves_a_standalone_directives_blank_target() {
+        use crate::rules::empty_lines::EmptyLinesRule;
+
+        let mut registry = RuleRegistry::with_defaults();
+        registry.register(Box::new(EmptyLinesRule::with_config(0, 0, 0)));
+        let yaml = "a: value\n# yamllint disable-line rule:trailing-spaces\n\n\nb: value   \n";
+        let result = Fixer::new(&registry).fix("test.yaml", yaml);
+
+        assert_eq!(
+            result.fixed_content.as_deref(),
+            Some("a: value\n# yamllint disable-line rule:trailing-spaces\n\nb: value\n")
+        );
+        assert_eq!(result.unfixable_problems.len(), 1);
+        assert_eq!(result.unfixable_problems[0].rule, "empty-lines");
+        assert_eq!(result.unfixable_problems[0].line, 3);
+    }
+
+    #[test]
+    fn fix_preserves_a_suppressed_blank_line_run() {
+        let registry = RuleRegistry::with_defaults();
+        let yaml = "# yamllint disable-line rule:empty-lines\n\n\n\na: value\n\n";
+        let result = Fixer::new(&registry).fix("test.yaml", yaml);
+        assert_eq!(
+            result.fixed_content.as_deref(),
+            Some("# yamllint disable-line rule:empty-lines\n\n\n\na: value\n")
         );
     }
 }
