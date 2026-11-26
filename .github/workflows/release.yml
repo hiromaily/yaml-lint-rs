@@ -32,7 +32,7 @@ jobs:
             archive: tar.gz
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -66,7 +66,7 @@ jobs:
           cd ../../..
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: yaml-lint-${{ matrix.target }}
           path: yaml-lint-${{ matrix.target }}.${{ matrix.archive }}
@@ -79,10 +79,10 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8.0.2
         with:
           path: artifacts
 
@@ -98,7 +98,7 @@ jobs:
           done
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3.0.4
         with:
           files: |
             artifacts/**/*.tar.gz
@@ -116,7 +116,7 @@ jobs:
 
     steps:
       - name: Checkout homebrew-tap
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           repository: hiromaily/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
