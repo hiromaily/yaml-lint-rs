@@ -40,3 +40,4 @@ Use these repository skills from the repository root. In Codex, enter the skill 
 | --- | --- |
 | Add or update a lint rule | [`$adding-rule-validation`](.agents/skills/adding-rule-validation/SKILL.md) |
 | Draft or create a GitHub issue | [`$create-issue`](.agents/skills/create-issue/SKILL.md) |
+| Review AI work and identify improvements | [`$review-agent-work`](.agents/skills/review-agent-work/SKILL.md) |
