@@ -16,7 +16,7 @@ Built with [Claude Code](https://www.anthropic.com/claude-code) and [Cursor](htt
 - ✅ Fast and efficient YAML linting
 - ✅ **Parallel linting** using all CPU cores (`-j`/`--jobs`)
 - ✅ **Auto-fix** support for common issues (`--fix`)
-- ✅ Multiple output formats (standard, colored, parsable)
+- ✅ Multiple output formats (standard, colored, parsable, JSON)
 - ✅ Configurable rules with preset configurations
 - ✅ Support for `.yamllint` configuration files
 - ✅ Directory traversal for batch linting
@@ -98,7 +98,16 @@ yaml-lint -f colored file.yaml
 
 # Machine-parsable output
 yaml-lint -f parsable file.yaml
+
+# JSON diagnostics for scripts and CI
+yaml-lint -f json file.yaml
 ```
+
+JSON output is a single array on stdout across all input files. Each diagnostic
+has `file`, `line`, `column`, `level`, `rule`, and `message` fields. Line and
+column numbers start at 1. A run with no diagnostics writes `[]`. Summaries and
+file read errors are written to stderr, and the usual exit codes apply. JSON
+output is available in lint mode.
 
 ### Suppress a rule for one line
 
