@@ -100,6 +100,13 @@ yaml-lint -f colored file.yaml
 yaml-lint -f parsable file.yaml
 ```
 
+### Suppress a rule for one line
+
+Add `# yamllint disable-line rule:<rule-name>` after a value to target the
+same line, or put it on its own line to target the next line. The directive
+also applies to `--fix`. See the [CLI guide](docs/cli-and-library-guide.md#line-level-comment-directives)
+for examples.
+
 ### Color control
 
 ```bash

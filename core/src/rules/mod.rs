@@ -7,6 +7,7 @@ pub mod braces;
 pub mod brackets;
 pub mod colons;
 pub mod comments;
+mod directives;
 pub mod document_start;
 pub mod empty_lines;
 pub mod flow_collection;
@@ -136,7 +137,7 @@ impl RuleRegistry {
         self.rules.keys().map(|s| s.as_str()).collect()
     }
 
-    /// Run all enabled rules on the given context
+    /// Run all enabled rules and apply line-level comment directives.
     pub fn check_all(&self, context: &LintContext) -> Vec<LintProblem> {
         let mut problems = Vec::new();
 
@@ -158,6 +159,8 @@ impl RuleRegistry {
                 p
             }));
         }
+
+        directives::suppress(&context.content, &mut problems);
 
         // Sort problems by line/column
         problems.sort();

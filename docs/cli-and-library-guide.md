@@ -6,12 +6,13 @@ Comprehensive guide for using yaml-lint-rs.
 
 1. [Installation](#installation)
 2. [Basic Usage](#basic-usage)
-3. [Configuration](#configuration)
-4. [CLI Options](#cli-options)
-5. [Output Formats](#output-formats)
-6. [Exit Codes](#exit-codes)
-7. [Integration](#integration)
-8. [Library Usage](#library-usage)
+3. [Line-Level Comment Directives](#line-level-comment-directives)
+4. [Configuration](#configuration)
+5. [CLI Options](#cli-options)
+6. [Output Formats](#output-formats)
+7. [Exit Codes](#exit-codes)
+8. [Integration](#integration)
+9. [Library Usage](#library-usage)
 
 ## Installation
 
@@ -70,6 +71,23 @@ This recursively finds all `.yaml` and `.yml` files.
 ```bash
 yaml-lint -c .yamllint file.yaml
 ```
+
+## Line-Level Comment Directives
+
+Use `# yamllint disable-line rule:<rule-name>` to suppress a single rule.
+An inline comment applies to its own line. A standalone comment applies to
+the immediately following line.
+
+```yaml
+url: https://example.com/a/long/path/to/a/resource/with/a/long/name  # yamllint disable-line rule:line-length
+
+# yamllint disable-line rule:truthy
+flag: yes
+```
+
+The directive applies to CLI diagnostics, library lint results, and auto-fix.
+If the YAML scanner encounters a lexical error, linting continues with all
+diagnostics visible.
 
 ## Configuration
 

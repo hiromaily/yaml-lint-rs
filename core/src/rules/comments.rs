@@ -179,15 +179,14 @@ impl Rule for CommentsRule {
     }
 
     fn fix(&self, content: &str, _problem: &LintProblem) -> Option<String> {
-        let lines: Vec<&str> = content.lines().collect();
+        let suppressed = super::directives::lines_for_rule(content, self.name());
         let mut result_lines: Vec<String> = Vec::new();
         let mut made_changes = false;
 
-        for (line_idx, line) in lines.iter().enumerate() {
+        for (line_idx, line) in content.lines().enumerate() {
             let mut fixed_line = line.to_string();
 
-            // Skip empty lines
-            if line.trim().is_empty() {
+            if line.trim().is_empty() || suppressed.contains(&(line_idx + 1)) {
                 result_lines.push(fixed_line);
                 continue;
             }

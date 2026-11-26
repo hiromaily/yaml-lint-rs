@@ -195,3 +195,41 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod directive_tests {
+    use super::*;
+
+    #[test]
+    fn fix_preserves_suppressed_trailing_spaces() {
+        let registry = RuleRegistry::with_defaults();
+        let yaml = "# yamllint disable-line rule:trailing-spaces\na: value   \nb: value   \n";
+        let result = Fixer::new(&registry).fix("test.yaml", yaml);
+        assert_eq!(
+            result.fixed_content.as_deref(),
+            Some("# yamllint disable-line rule:trailing-spaces\na: value   \nb: value\n")
+        );
+    }
+
+    #[test]
+    fn fix_preserves_suppressed_comment_spacing() {
+        let registry = RuleRegistry::with_defaults();
+        let yaml = "a: value # yamllint disable-line rule:comments\nb: value # comment\n";
+        let result = Fixer::new(&registry).fix("test.yaml", yaml);
+        assert_eq!(
+            result.fixed_content.as_deref(),
+            Some("a: value # yamllint disable-line rule:comments\nb: value  # comment\n")
+        );
+    }
+
+    #[test]
+    fn fix_preserves_a_suppressed_blank_line_run() {
+        let registry = RuleRegistry::with_defaults();
+        let yaml = "# yamllint disable-line rule:empty-lines\n\n\n\na: value\n\n";
+        let result = Fixer::new(&registry).fix("test.yaml", yaml);
+        assert_eq!(
+            result.fixed_content.as_deref(),
+            Some("# yamllint disable-line rule:empty-lines\n\n\n\na: value\n")
+        );
+    }
+}

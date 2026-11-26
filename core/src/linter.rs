@@ -85,3 +85,56 @@ mod tests {
         assert!(problems.is_empty()); // Rule is disabled
     }
 }
+
+#[cfg(test)]
+mod directive_tests {
+    use super::*;
+
+    #[test]
+    fn disable_line_targets_only_the_named_rule() {
+        let yaml =
+            "a: value   \nb: value # yamllint disable-line rule:trailing-spaces   \nc: value   \n";
+        let problems = Linter::with_defaults().lint_string(yaml).unwrap();
+        let trailing_lines: Vec<_> = problems
+            .iter()
+            .filter(|p| p.rule == "trailing-spaces")
+            .map(|p| p.line)
+            .collect();
+        assert_eq!(trailing_lines, [1, 3]);
+        assert!(problems.iter().any(|p| p.line == 2 && p.rule == "comments"));
+    }
+
+    #[test]
+    fn standalone_disable_line_targets_the_following_line() {
+        let yaml = "# yamllint disable-line rule:trailing-spaces\na: value   \nb: value   \n";
+        let problems = Linter::with_defaults().lint_string(yaml).unwrap();
+        let trailing_lines: Vec<_> = problems
+            .iter()
+            .filter(|p| p.rule == "trailing-spaces")
+            .map(|p| p.line)
+            .collect();
+        assert_eq!(trailing_lines, [3]);
+    }
+
+    #[test]
+    fn disable_line_text_in_scalar_values_is_ignored() {
+        let yaml = concat!(
+            "block: |-\n",
+            "  # yamllint disable-line rule:trailing-spaces\n",
+            "  block value   \n",
+            "quoted: 'first line\n",
+            "  # yamllint disable-line rule:trailing-spaces\n",
+            "  last line'   \n",
+            "plain: value# yamllint disable-line rule:trailing-spaces   \n",
+            "ordinary: value  # text # yamllint disable-line rule:trailing-spaces   \n",
+            "real: value  # yamllint disable-line rule:trailing-spaces   \n",
+        );
+        let problems = Linter::with_defaults().lint_string(yaml).unwrap();
+        let trailing_lines: Vec<_> = problems
+            .iter()
+            .filter(|problem| problem.rule == "trailing-spaces")
+            .map(|problem| problem.line)
+            .collect();
+        assert_eq!(trailing_lines, [3, 6, 7, 8]);
+    }
+}

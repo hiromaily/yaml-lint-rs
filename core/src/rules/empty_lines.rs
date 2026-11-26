@@ -161,6 +161,7 @@ impl Rule for EmptyLinesRule {
             return None;
         }
 
+        let suppressed = super::directives::lines_for_rule(content, self.name());
         let mut result_lines: Vec<&str> = Vec::new();
 
         // Skip empty lines at start (keep max_start)
@@ -189,8 +190,13 @@ impl Rule for EmptyLinesRule {
                 // Don't add yet, wait until we know how many to add
             } else {
                 // Add up to max empty lines before this content
-                let empty_to_add = consecutive_empty.min(self.max);
-                result_lines.extend(std::iter::repeat_n("", empty_to_add));
+                let start = idx - consecutive_empty;
+                if suppressed.contains(&(start + 1)) {
+                    result_lines.extend_from_slice(&lines[start..idx]);
+                } else {
+                    let empty_to_add = consecutive_empty.min(self.max);
+                    result_lines.extend(std::iter::repeat_n("", empty_to_add));
+                }
                 consecutive_empty = 0;
 
                 result_lines.push(line);
@@ -198,8 +204,12 @@ impl Rule for EmptyLinesRule {
                 // If this is the last content line, handle trailing empty lines
                 if is_last_content_line {
                     let end_empty_count = lines.len() - idx - 1;
-                    let end_empty_to_add = self.max_end.min(end_empty_count);
-                    result_lines.extend(std::iter::repeat_n("", end_empty_to_add));
+                    if suppressed.contains(&(idx + 2)) {
+                        result_lines.extend_from_slice(&lines[idx + 1..]);
+                    } else {
+                        let end_empty_to_add = self.max_end.min(end_empty_count);
+                        result_lines.extend(std::iter::repeat_n("", end_empty_to_add));
+                    }
                     break;
                 }
             }
