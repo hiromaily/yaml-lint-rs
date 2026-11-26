@@ -1,4 +1,4 @@
-# Quick Start Guide
+# Run Your First Lint
 
 Get started with yaml-lint-rs in 5 minutes.
 
@@ -173,10 +173,10 @@ file.yaml
 
 ## Next Steps
 
-- Read [USAGE.md](docs/USAGE.md) for detailed CLI options
-- Read [RULES.md](docs/RULES.md) for rule descriptions
-- Check [examples/sample.yaml](examples/sample.yaml) for YAML examples
-- See [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) for architecture details
+- Read [CLI and library guide](cli-and-library-guide.md) for detailed CLI options
+- Read [linting rules](lint-rules.md) for rule descriptions
+- Check [examples/sample.yaml](../examples/sample.yaml) for YAML examples
+- See [project-summary.md](project-summary.md) for architecture details
 
 ## Need Help?
 

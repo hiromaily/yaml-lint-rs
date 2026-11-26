@@ -1,4 +1,4 @@
-# Usage Guide
+# CLI and Library Guide
 
 Comprehensive guide for using yaml-lint-rs.
 

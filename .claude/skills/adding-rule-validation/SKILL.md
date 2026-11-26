@@ -17,7 +17,7 @@ When adding a new rule, complete these steps in order:
 4. [ ] Add unit tests (minimum 10+ test cases)
 5. [ ] Create test fixture: `tests/fixtures/invalid/<rule-name>.yaml`
 6. [ ] Add integration test in `core/tests/integration_tests.rs`
-7. [ ] Update `docs/RULES.md`
+7. [ ] Update `docs/lint-rules.md`
 8. [ ] Update `README.md` rule list
 9. [ ] Run `make ci` and `make validate-fixtures` to verify
 10. [ ] Create PR
@@ -265,7 +265,7 @@ fn fixture_path(name: &str) -> PathBuf {
 }
 ```
 
-## Step 7: Update docs/RULES.md
+## Step 7: Update docs/lint-rules.md
 
 Add rule documentation in appropriate section:
 

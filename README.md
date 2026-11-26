@@ -61,6 +61,14 @@ cargo build --release
 # The binary will be at ./target/release/yaml-lint
 ```
 
+## Documentation
+
+- [Run your first lint](docs/first-lint.md)
+- [CLI, configuration, and library guide](docs/cli-and-library-guide.md)
+- [Linting Rules](docs/lint-rules.md)
+- [Project Architecture](docs/project-summary.md)
+- [Roadmap](docs/roadmap.md)
+
 ## Usage
 
 ### Basic usage
@@ -278,14 +286,6 @@ key: |
   this is a very long value
   split across multiple lines
 ```
-
-## Roadmap
-
-- [x] Phase 1: Core infrastructure + 6 priority rules
-- [ ] Phase 2: Additional output formats, directives, more rules
-- [ ] Phase 3: Full yamllint parity (23 rules)
-- [x] Phase 4: Performance optimizations, parallel linting
-- [ ] Phase 5: Editor integration (LSP?)
 
 ## Contributing
 
