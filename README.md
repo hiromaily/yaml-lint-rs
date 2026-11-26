@@ -307,7 +307,8 @@ key: |
 
 Contributions are welcome! Please feel free to submit issues or pull requests.
 
-See [AGENTS.md](AGENTS.md) for the development workflow, CI checks, and Codex skills for lint rules and GitHub issues.
+See [AGENTS.md](AGENTS.md) for development checks and Codex skills.
+The [contribution guide](docs/contributing.md) covers CLI regression tests and handling local changes after a merge.
 
 ## License
 
