@@ -10,6 +10,43 @@ use crate::rules::{LintContext, Rule, RuleLevel};
 #[derive(Debug)]
 pub struct NewLineAtEndOfFileRule;
 
+impl NewLineAtEndOfFileRule {
+    pub(crate) fn with_ending(ending: &'static str) -> impl Rule {
+        ConfiguredNewLineAtEndOfFileRule { ending }
+    }
+
+    fn append_ending(content: &str, ending: &str) -> Option<String> {
+        if content.is_empty() || content.ends_with('\n') {
+            return None;
+        }
+        let text = content.strip_suffix('\r').unwrap_or(content);
+        Some(format!("{text}{ending}"))
+    }
+}
+
+#[derive(Debug)]
+struct ConfiguredNewLineAtEndOfFileRule {
+    ending: &'static str,
+}
+
+impl Rule for ConfiguredNewLineAtEndOfFileRule {
+    fn name(&self) -> &'static str {
+        NewLineAtEndOfFileRule.name()
+    }
+
+    fn check(&self, context: &LintContext) -> Vec<LintProblem> {
+        NewLineAtEndOfFileRule.check(context)
+    }
+
+    fn is_fixable(&self) -> bool {
+        true
+    }
+
+    fn fix(&self, content: &str, _problem: &LintProblem) -> Option<String> {
+        NewLineAtEndOfFileRule::append_ending(content, self.ending)
+    }
+}
+
 impl Rule for NewLineAtEndOfFileRule {
     fn name(&self) -> &'static str {
         "new-line-at-end-of-file"
@@ -49,12 +86,7 @@ impl Rule for NewLineAtEndOfFileRule {
     }
 
     fn fix(&self, content: &str, _problem: &LintProblem) -> Option<String> {
-        // Simply add a newline at the end if missing
-        if content.is_empty() || content.ends_with('\n') {
-            return None; // Already valid
-        }
-
-        Some(format!("{}\n", content))
+        Self::append_ending(content, "\n")
     }
 }
 

@@ -318,3 +318,37 @@ fn test_new_lines_detects_crlf_in_a_file() {
         .collect();
     assert_eq!(positions, [(1, 11, yaml_lint_core::LintLevel::Error)]);
 }
+
+#[test]
+fn test_fix_preserves_crlf_and_adds_configured_final_ending() {
+    let config =
+        Config::load_from_str("extends: default\nrules:\n  new-lines: {type: dos}\n").unwrap();
+    let registry = config.create_registry();
+    let fixer = Fixer::new(&registry);
+
+    for (input, expected) in [
+        (
+            "\r\nkey: value  \r\n#comment\r\nother: value",
+            "key: value\r\n# comment\r\nother: value\r\n",
+        ),
+        ("key: value", "key: value\r\n"),
+    ] {
+        let result = fixer.fix("test.yaml", input);
+        assert!(result.unfixable_problems.is_empty(), "{result:?}");
+        assert_eq!(result.fixed_content.as_deref(), Some(expected));
+    }
+}
+
+#[test]
+fn test_fix_preserves_an_explicitly_suppressed_mixed_ending() {
+    let registry = Config::default().create_registry();
+    let result = Fixer::new(&registry).fix(
+        "test.yaml",
+        "key: value  # yamllint disable-line rule:new-lines\r\nother: value  \n",
+    );
+    assert!(result.unfixable_problems.is_empty(), "{result:?}");
+    assert_eq!(
+        result.fixed_content.as_deref(),
+        Some("key: value  # yamllint disable-line rule:new-lines\r\nother: value\n"),
+    );
+}

@@ -474,7 +474,8 @@ rules:
     type: dos
 ```
 
-Use `new-line-at-end-of-file` to require a final line ending.
+Use `new-line-at-end-of-file` to require a final line ending. Its auto-fix uses
+the style configured by `new-lines` when that rule is enabled.
 
 ## Presets
 

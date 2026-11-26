@@ -1,7 +1,9 @@
 //! Configuration system for the linter
 
 use crate::Result;
-use crate::rules::{RuleLevel, new_lines::NewLineType};
+use crate::rules::{
+    RuleLevel, new_line_at_end_of_file::NewLineAtEndOfFileRule, new_lines::NewLineType,
+};
 use indexmap::IndexMap;
 use std::path::Path;
 
@@ -633,6 +635,17 @@ impl Config {
             return crate::rules::RuleRegistry::with_defaults();
         }
 
+        let newline_type = self
+            .rules
+            .get("new-lines")
+            .filter(|rule| rule.level() != RuleLevel::Disable)
+            .and_then(RuleConfig::options)
+            .and_then(|options| match options {
+                RuleOptions::NewLines { newline_type } => Some(*newline_type),
+                _ => None,
+            })
+            .unwrap_or_default();
+
         // Register each rule with its configuration
         for (rule_name, rule_config) in &self.rules {
             let level = rule_config.level();
@@ -693,15 +706,9 @@ impl Config {
                         Box::new(crate::rules::indentation::IndentationRule::new())
                     }
                 }
-                "new-lines" => construct_rule!(
-                    rule_config,
-                    RuleOptions::NewLines { newline_type } => crate::rules::new_lines::NewLinesRule {
-                        newline_type: *newline_type,
-                    },
-                    crate::rules::new_lines::NewLinesRule::default()
-                ),
+                "new-lines" => Box::new(crate::rules::new_lines::NewLinesRule { newline_type }),
                 "new-line-at-end-of-file" => {
-                    construct_rule!(crate::rules::new_line_at_end_of_file::NewLineAtEndOfFileRule)
+                    Box::new(NewLineAtEndOfFileRule::with_ending(newline_type.ending()))
                 }
                 "empty-lines" => construct_rule!(
                     rule_config,

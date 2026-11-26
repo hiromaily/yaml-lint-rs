@@ -15,6 +15,27 @@ pub enum NewLineType {
     Platform,
 }
 
+impl NewLineType {
+    pub(crate) fn ending(self) -> &'static str {
+        match self {
+            Self::Dos => "\r\n",
+            Self::Platform if cfg!(windows) => "\r\n",
+            _ => "\n",
+        }
+    }
+}
+
+// Split a chunk from split_inclusive('\n') into its text and original terminator.
+pub(super) fn split_ending(line: &str) -> (&str, &str) {
+    if let Some(text) = line.strip_suffix("\r\n") {
+        (text, "\r\n")
+    } else if let Some(text) = line.strip_suffix('\n') {
+        (text, "\n")
+    } else {
+        (line, "")
+    }
+}
+
 /// Reports line endings that differ from the configured style.
 #[derive(Debug, Default)]
 pub struct NewLinesRule {
@@ -28,11 +49,7 @@ impl Rule for NewLinesRule {
     }
 
     fn check(&self, context: &LintContext) -> Vec<LintProblem> {
-        let expected = match self.newline_type {
-            NewLineType::Dos => "\r\n",
-            NewLineType::Platform if cfg!(windows) => "\r\n",
-            _ => "\n",
-        };
+        let expected = self.newline_type.ending();
         let message = if expected == "\r\n" {
             r"wrong new line character: expected \r\n"
         } else {
