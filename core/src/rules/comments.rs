@@ -1,5 +1,6 @@
 //! Comments rule - enforces consistent comment formatting
 
+use super::new_lines::split_ending;
 use crate::problem::{LintLevel, LintProblem};
 use crate::rules::{LintContext, Rule, RuleLevel};
 
@@ -180,14 +181,15 @@ impl Rule for CommentsRule {
 
     fn fix(&self, content: &str, _problem: &LintProblem) -> Option<String> {
         let suppressed = super::directives::lines_for_rule(content, self.name());
-        let mut result_lines: Vec<String> = Vec::new();
+        let mut result = String::with_capacity(content.len());
         let mut made_changes = false;
 
-        for (line_idx, line) in content.lines().enumerate() {
+        for (line_idx, chunk) in content.split_inclusive('\n').enumerate() {
+            let (line, ending) = split_ending(chunk);
             let mut fixed_line = line.to_string();
 
             if line.trim().is_empty() || suppressed.contains(&(line_idx + 1)) {
-                result_lines.push(fixed_line);
+                result.push_str(chunk);
                 continue;
             }
 
@@ -195,7 +197,7 @@ impl Rule for CommentsRule {
             if let Some(comment_start) = Self::find_comment_start(line) {
                 // Skip shebangs on first line
                 if self.ignore_shebangs && line_idx == 0 && Self::is_shebang(line) {
-                    result_lines.push(fixed_line);
+                    result.push_str(chunk);
                     continue;
                 }
 
@@ -235,19 +237,11 @@ impl Rule for CommentsRule {
                 }
             }
 
-            result_lines.push(fixed_line);
+            result.push_str(&fixed_line);
+            result.push_str(ending);
         }
 
-        if !made_changes {
-            return None;
-        }
-
-        let mut result = result_lines.join("\n");
-        if content.ends_with('\n') {
-            result.push('\n');
-        }
-
-        Some(result)
+        made_changes.then_some(result)
     }
 }
 

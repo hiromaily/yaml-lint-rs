@@ -16,6 +16,7 @@ pub mod indentation;
 pub mod key_duplicates;
 pub mod line_length;
 pub mod new_line_at_end_of_file;
+pub mod new_lines;
 pub mod trailing_spaces;
 pub mod truthy;
 
@@ -98,6 +99,7 @@ impl RuleRegistry {
         registry.register(Box::new(key_duplicates::KeyDuplicatesRule));
         registry.register(Box::new(indentation::IndentationRule::new()));
         registry.register(Box::new(new_line_at_end_of_file::NewLineAtEndOfFileRule));
+        registry.register(Box::new(new_lines::NewLinesRule::default()));
         registry.register(Box::new(empty_lines::EmptyLinesRule::new()));
         registry.register(Box::new(hyphens::HyphensRule::new()));
         registry.register(Box::new(comments::CommentsRule::new()));

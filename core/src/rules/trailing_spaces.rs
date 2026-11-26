@@ -1,5 +1,6 @@
 //! Trailing spaces rule - detects whitespace at line endings
 
+use super::new_lines::split_ending;
 use crate::problem::{LintLevel, LintProblem};
 use crate::rules::{LintContext, Rule, RuleLevel};
 
@@ -44,31 +45,19 @@ impl Rule for TrailingSpacesRule {
 
     fn fix(&self, content: &str, _problem: &LintProblem) -> Option<String> {
         let suppressed = super::directives::lines_for_rule(content, self.name());
-        let lines = content.lines().enumerate();
-        if !lines
-            .clone()
-            .any(|(index, line)| !suppressed.contains(&(index + 1)) && line.ends_with([' ', '\t']))
-        {
-            return None;
+        let mut result = String::with_capacity(content.len());
+        let mut changed = false;
+        for (index, chunk) in content.split_inclusive('\n').enumerate() {
+            let (line, ending) = split_ending(chunk);
+            if !suppressed.contains(&(index + 1)) && line.ends_with([' ', '\t']) {
+                result.push_str(line.trim_end());
+                result.push_str(ending);
+                changed = true;
+            } else {
+                result.push_str(chunk);
+            }
         }
-
-        let mut result = lines
-            .map(|(index, line)| {
-                if suppressed.contains(&(index + 1)) {
-                    line
-                } else {
-                    line.trim_end()
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        // Preserve original trailing newline if it existed
-        if content.ends_with('\n') {
-            result.push('\n');
-        }
-
-        Some(result)
+        changed.then_some(result)
     }
 }
 

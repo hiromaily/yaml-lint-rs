@@ -363,6 +363,8 @@ answer: "yes"       # String, not boolean true
 - Quoted values are not flagged (they are strings)
 - Critical for Kubernetes/Helm users
 
+## Implemented Rules (Phase 2)
+
 ### braces
 
 **Level**: Error (default)
@@ -455,6 +457,26 @@ Each rule can be configured with one of three levels:
 - **warning**: Problem is reported but doesn't fail (exit code 2 with --strict)
 - **disable**: Rule is not checked
 
+### new-lines
+
+Enforces a line ending style throughout the YAML source. The default preset reports
+mismatches as errors, and the relaxed preset reports them as warnings.
+
+| `type` | Expected line ending |
+| --- | --- |
+| `unix` (default) | LF |
+| `dos` | CRLF |
+| `platform` | CRLF on Windows and LF elsewhere |
+
+```yaml
+rules:
+  new-lines:
+    type: dos
+```
+
+Use `new-line-at-end-of-file` to require a final line ending. Its auto-fix uses
+the style configured by `new-lines` when that rule is enabled.
+
 ## Presets
 
 ### default (strict)
@@ -462,6 +484,7 @@ Each rule can be configured with one of three levels:
 All rules enabled as errors, except:
 
 - `document-start`: disabled
+- `truthy`: warning
 
 Suitable for production code.
 
@@ -474,6 +497,7 @@ Most rules as warnings:
 - `colons`: warning
 - `indentation`: warning
 - `new-line-at-end-of-file`: warning
+- `new-lines`: warning
 - `empty-lines`: warning
 - `hyphens`: warning
 - `comments`: warning

@@ -1,5 +1,6 @@
 //! Empty lines rule - limits consecutive blank lines
 
+use super::new_lines::split_ending;
 use crate::problem::{LintLevel, LintProblem};
 use crate::rules::{LintContext, Rule, RuleLevel};
 use std::collections::HashSet;
@@ -157,7 +158,7 @@ impl Rule for EmptyLinesRule {
     }
 
     fn fix(&self, content: &str, _problem: &LintProblem) -> Option<String> {
-        let lines: Vec<&str> = content.lines().collect();
+        let lines: Vec<&str> = content.split_inclusive('\n').collect();
         if lines.is_empty() {
             return None;
         }
@@ -172,36 +173,30 @@ impl Rule for EmptyLinesRule {
                 standalone_targets.insert(directive.target);
             }
         }
-        let mut result_lines: Vec<&str> = Vec::new();
-
-        // Skip empty lines at start (keep max_start)
-        let mut start_empty_count = 0;
-        let mut skip_until = 0;
-        for (idx, line) in lines.iter().enumerate() {
-            if line.trim().is_empty() {
-                start_empty_count += 1;
-            } else {
-                skip_until = idx;
-                break;
-            }
+        let mut result = String::with_capacity(content.len());
+        let skip_until = lines
+            .iter()
+            .position(|line| !line.trim().is_empty())
+            .unwrap_or(lines.len());
+        for line in &lines[..self.max_start.min(skip_until)] {
+            result.push_str(split_ending(line).1);
         }
-        // Add allowed empty lines at start
-        let start_empty_to_add = self.max_start.min(start_empty_count);
-        result_lines.extend(std::iter::repeat_n("", start_empty_to_add));
 
         // Keep a standalone directive attached to its original line when
         // shortening a blank run, even if the configured limit is zero.
-        let kept_blank_lines = |start: usize, count: usize, limit: usize| {
-            let (original, normalized) = if suppressed.contains(&(start + 1)) {
-                (count, 0)
+        let keep_blank_lines = |result: &mut String, start: usize, count: usize, limit: usize| {
+            let (original, kept) = if suppressed.contains(&(start + 1)) {
+                (count, count)
             } else {
                 let original = usize::from(count > 0 && standalone_targets.contains(&(start + 1)));
-                (original, count.min(limit).saturating_sub(original))
+                (original, count.min(limit).max(original))
             };
-            lines[start..start + original]
-                .iter()
-                .copied()
-                .chain(std::iter::repeat_n("", normalized))
+            for line in &lines[start..start + original] {
+                result.push_str(line);
+            }
+            for line in &lines[start + original..start + kept] {
+                result.push_str(split_ending(line).1);
+            }
         };
 
         // Process middle content
@@ -214,23 +209,18 @@ impl Rule for EmptyLinesRule {
             } else {
                 // Add up to max empty lines before this content
                 let start = idx - consecutive_empty;
-                result_lines.extend(kept_blank_lines(start, consecutive_empty, self.max));
+                keep_blank_lines(&mut result, start, consecutive_empty, self.max);
                 consecutive_empty = 0;
 
-                result_lines.push(line);
+                result.push_str(line);
 
                 // If this is the last content line, handle trailing empty lines
                 if Some(idx) == last_content {
                     let start = idx + 1;
-                    result_lines.extend(kept_blank_lines(start, lines.len() - start, self.max_end));
+                    keep_blank_lines(&mut result, start, lines.len() - start, self.max_end);
                     break;
                 }
             }
-        }
-
-        let mut result = result_lines.join("\n");
-        if content.ends_with('\n') {
-            result.push('\n');
         }
 
         (result != content).then_some(result)
