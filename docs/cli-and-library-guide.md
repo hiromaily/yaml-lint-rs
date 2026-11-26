@@ -169,7 +169,7 @@ yaml-lint [OPTIONS] <FILES>...
 |--------|-------------|
 | `-c, --config <PATH>` | Path to config file |
 | `-d, --preset <NAME>` | Use preset (default, relaxed) |
-| `-f, --format <FORMAT>` | Output format (standard, colored, parsable) |
+| `-f, --format <FORMAT>` | Output format (standard, colored, parsable, json) |
 | `--strict` | Treat warnings as errors (exit code 2) |
 | `-j, --jobs <N>` | Number of parallel jobs (0 = auto-detect, default: 0) |
 | `--list-files` | List files that would be linted |
@@ -236,6 +236,18 @@ test.yaml:15:80: [warning] line too long (82 > 80 characters) (line-length)
 ```bash
 yaml-lint -f parsable file.yaml
 ```
+
+### json
+
+```bash
+yaml-lint -f json file.yaml other.yaml
+```
+
+The CLI writes one JSON array to stdout for all input files. Each diagnostic
+includes `file`, `line`, `column`, `level`, `rule`, and `message`. Line and
+column numbers start at 1. A run with no diagnostics writes `[]`.
+Summaries and file read errors go to stderr, and the usual exit codes apply.
+Use this format in lint mode.
 
 ## Exit Codes
 

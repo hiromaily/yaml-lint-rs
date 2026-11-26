@@ -29,7 +29,7 @@ The [default rule registry](../core/src/rules/mod.rs) includes:
 - `new-line-at-end-of-file`, `empty-lines`, `hyphens`, `comments`, and `truthy`
 - `braces` and `brackets`
 
-The CLI supports recursive linting of YAML files, parallel execution with `--jobs`, and standard, colored, and parsable output. Use `--fix` to correct trailing spaces, a missing final newline, or excess blank lines. Use `--dry-run` to preview those fixes.
+The CLI supports recursive linting of YAML files, parallel execution with `--jobs`, and standard, colored, parsable, and JSON output. Use `--fix` to correct trailing spaces, a missing final newline, or excess blank lines. Use `--dry-run` to preview those fixes.
 
 Configuration files support the `default` and `relaxed` presets, per-rule severity levels, and rule-specific options. See the [CLI and library guide](cli-and-library-guide.md) and [rule documentation](lint-rules.md).
 

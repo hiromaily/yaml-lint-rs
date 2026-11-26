@@ -1,14 +1,15 @@
 //! YAML Linter CLI
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use clap::{Parser, ValueEnum};
 use is_terminal::IsTerminal;
 use rayon::prelude::*;
+use serde::Serialize;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
 use walkdir::WalkDir;
-use yaml_lint_core::{Config, Fixer, LintLevel, Linter};
+use yaml_lint_core::{Config, Fixer, LintLevel, LintProblem, Linter};
 
 /// Color mode for output
 #[derive(Debug, Clone, Copy, ValueEnum, Default)]
@@ -34,7 +35,7 @@ struct Cli {
     #[arg(short, long)]
     config: Option<PathBuf>,
 
-    /// Output format (standard, colored, parsable)
+    /// Output format (standard, colored, parsable, json)
     #[arg(short = 'f', long, default_value = "standard")]
     format: String,
 
@@ -69,6 +70,11 @@ struct Cli {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    let json_output = cli.format.eq_ignore_ascii_case("json");
+    ensure!(
+        !json_output || !(cli.list_files || cli.fix || cli.dry_run),
+        "JSON output is only available for linting without --list-files, --fix, or --dry-run"
+    );
 
     // Configure color output
     configure_colors(&cli.color);
@@ -98,19 +104,22 @@ fn main() -> Result<()> {
     let linter = Linter::new(config);
 
     // Parse output format, defaulting to colored if TTY and not explicitly set
-    let format: yaml_lint_core::output::OutputFormat =
-        if cli.format == "standard" && should_use_colors(&cli.color) {
-            yaml_lint_core::output::OutputFormat::Colored
-        } else {
-            cli.format
-                .parse()
-                .map_err(|e| anyhow::anyhow!("Invalid format: {}", e))?
-        };
-
-    let formatter = format.formatter();
+    let formatter = if json_output {
+        None
+    } else {
+        let format: yaml_lint_core::output::OutputFormat =
+            if cli.format == "standard" && should_use_colors(&cli.color) {
+                yaml_lint_core::output::OutputFormat::Colored
+            } else {
+                cli.format
+                    .parse()
+                    .map_err(|e| anyhow::anyhow!("Invalid format: {}", e))?
+            };
+        Some(format.formatter())
+    };
 
     // Lint all files in parallel, collect results ordered by file path
-    let lint_results: Vec<(PathBuf, anyhow::Result<Vec<yaml_lint_core::LintProblem>>)> = yaml_files
+    let lint_results: Vec<(PathBuf, anyhow::Result<Vec<LintProblem>>)> = yaml_files
         .par_iter()
         .map(|file| {
             let result = linter.lint_file(file).map_err(Into::into);
@@ -122,13 +131,25 @@ fn main() -> Result<()> {
     let mut has_errors = false;
     let mut has_warnings = false;
     let mut total_problems = 0;
+    let mut diagnostics = Vec::new();
 
     for (file, result) in &lint_results {
         match result {
             Ok(problems) => {
                 if !problems.is_empty() {
-                    let output = formatter.format_problems(problems, &file.display().to_string());
-                    print!("{}", output);
+                    let path = file.to_string_lossy();
+                    if let Some(formatter) = &formatter {
+                        print!("{}", formatter.format_problems(problems, &path));
+                    } else {
+                        diagnostics.extend(problems.iter().map(|problem| JsonDiagnostic {
+                            file: path.clone(),
+                            line: problem.line,
+                            column: problem.column,
+                            level: problem.level.to_string(),
+                            rule: &problem.rule,
+                            message: &problem.message,
+                        }));
+                    }
 
                     for problem in problems {
                         match problem.level {
@@ -145,6 +166,15 @@ fn main() -> Result<()> {
                 has_errors = true;
             }
         }
+    }
+
+    if json_output {
+        use std::io::Write;
+
+        let mut stdout = io::stdout().lock();
+        serde_json::to_writer(&mut stdout, &diagnostics)?;
+        writeln!(stdout)?;
+        stdout.flush()?;
     }
 
     // Print summary if there were problems
@@ -165,6 +195,16 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[derive(Serialize)]
+struct JsonDiagnostic<'a> {
+    file: std::borrow::Cow<'a, str>,
+    line: usize,
+    column: usize,
+    level: String,
+    rule: &'a str,
+    message: &'a str,
 }
 
 /// Minimal per-file summary collected from the parallel fix phase.
