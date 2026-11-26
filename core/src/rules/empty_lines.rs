@@ -2,6 +2,7 @@
 
 use crate::problem::{LintLevel, LintProblem};
 use crate::rules::{LintContext, Rule, RuleLevel};
+use std::collections::HashSet;
 
 /// Rule that limits consecutive empty lines in YAML files
 ///
@@ -161,7 +162,16 @@ impl Rule for EmptyLinesRule {
             return None;
         }
 
-        let suppressed = super::directives::lines_for_rule(content, self.name());
+        let mut suppressed = HashSet::new();
+        let mut standalone_targets = HashSet::new();
+        for directive in super::directives::collect(content) {
+            if directive.rule == self.name() {
+                suppressed.insert(directive.target);
+            }
+            if directive.standalone {
+                standalone_targets.insert(directive.target);
+            }
+        }
         let mut result_lines: Vec<&str> = Vec::new();
 
         // Skip empty lines at start (keep max_start)
@@ -179,37 +189,40 @@ impl Rule for EmptyLinesRule {
         let start_empty_to_add = self.max_start.min(start_empty_count);
         result_lines.extend(std::iter::repeat_n("", start_empty_to_add));
 
+        // Keep a standalone directive attached to its original line when
+        // shortening a blank run, even if the configured limit is zero.
+        let kept_blank_lines = |start: usize, count: usize, limit: usize| {
+            let (original, normalized) = if suppressed.contains(&(start + 1)) {
+                (count, 0)
+            } else {
+                let original = usize::from(count > 0 && standalone_targets.contains(&(start + 1)));
+                (original, count.min(limit).saturating_sub(original))
+            };
+            lines[start..start + original]
+                .iter()
+                .copied()
+                .chain(std::iter::repeat_n("", normalized))
+        };
+
         // Process middle content
+        let last_content = lines.iter().rposition(|line| !line.trim().is_empty());
         let mut consecutive_empty = 0;
         for (idx, line) in lines.iter().enumerate().skip(skip_until) {
-            let is_last_content_line =
-                idx == lines.len() - 1 || lines[idx + 1..].iter().all(|l| l.trim().is_empty());
-
             if line.trim().is_empty() {
                 consecutive_empty += 1;
                 // Don't add yet, wait until we know how many to add
             } else {
                 // Add up to max empty lines before this content
                 let start = idx - consecutive_empty;
-                if suppressed.contains(&(start + 1)) {
-                    result_lines.extend_from_slice(&lines[start..idx]);
-                } else {
-                    let empty_to_add = consecutive_empty.min(self.max);
-                    result_lines.extend(std::iter::repeat_n("", empty_to_add));
-                }
+                result_lines.extend(kept_blank_lines(start, consecutive_empty, self.max));
                 consecutive_empty = 0;
 
                 result_lines.push(line);
 
                 // If this is the last content line, handle trailing empty lines
-                if is_last_content_line {
-                    let end_empty_count = lines.len() - idx - 1;
-                    if suppressed.contains(&(idx + 2)) {
-                        result_lines.extend_from_slice(&lines[idx + 1..]);
-                    } else {
-                        let end_empty_to_add = self.max_end.min(end_empty_count);
-                        result_lines.extend(std::iter::repeat_n("", end_empty_to_add));
-                    }
+                if Some(idx) == last_content {
+                    let start = idx + 1;
+                    result_lines.extend(kept_blank_lines(start, lines.len() - start, self.max_end));
                     break;
                 }
             }
@@ -220,7 +233,7 @@ impl Rule for EmptyLinesRule {
             result.push('\n');
         }
 
-        Some(result)
+        (result != content).then_some(result)
     }
 }
 

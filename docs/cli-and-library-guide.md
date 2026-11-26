@@ -86,6 +86,9 @@ flag: yes
 ```
 
 The directive applies to CLI diagnostics, library lint results, and auto-fix.
+Auto-fix keeps a blank line targeted by a standalone directive in place. If
+the configured blank-line limit requires deleting that line, the diagnostic
+remains after auto-fix.
 If the YAML scanner encounters a lexical error, linting continues with all
 diagnostics visible.
 
