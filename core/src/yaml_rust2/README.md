@@ -11,8 +11,13 @@ Local scanner changes
   checks that the delimiter matches the open collection.
 - End alias keys before a mapping separator using the scanner's existing
   separator rules.
+- Retain the dash location for block entries and mark implicit block
+  mappings at their first key. Identify a separator rejected after a
+  continued plain scalar so the linter can avoid a duplicate diagnosis.
 
 Local parser changes
 
 - Require an explicit start marker for subsequent documents, including
   after an explicit end marker, to match yamllint's syntax diagnostics.
+- Report unexpected mapping starts and sequence entries at the block
+  boundary where they occurred.

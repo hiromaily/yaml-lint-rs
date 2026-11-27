@@ -617,19 +617,6 @@ impl<T: Iterator<Item = char>> Parser<T> {
                         ));
                     }
                 };
-                let mark = if matches!(token, TokenType::BlockMappingStart) {
-                    // The scanner inserts an implicit mapping start at its
-                    // first colon. Point to the key that opened the mapping.
-                    self.skip();
-                    let Token(key, _) = *self.peek_token()?;
-                    if key.index() < mark.index() {
-                        key
-                    } else {
-                        mark
-                    }
-                } else {
-                    mark
-                };
                 Err(ScanError::new(
                     mark,
                     &format!("expected '<document start>', but found '{found}'"),
@@ -747,7 +734,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
             _ => {}
         }
         match *self.peek_token()? {
-            Token(mark, TokenType::BlockEntry) if indentless_sequence => {
+            Token(mark, TokenType::BlockEntry(_)) if indentless_sequence => {
                 self.state = State::IndentlessSequenceEntry;
                 Ok((Event::SequenceStart(anchor_id, tag), mark))
             }
@@ -817,6 +804,13 @@ impl<T: Iterator<Item = char>> Parser<T> {
                 self.pop_state();
                 self.skip();
                 Ok((Event::MappingEnd, mark))
+            }
+            Token(mark, TokenType::BlockMappingStart) => Err(ScanError::new(
+                mark,
+                "expected <block end>, but found '<block mapping start>'",
+            )),
+            Token(_, TokenType::BlockEntry(dash)) => {
+                Err(ScanError::new(dash, "expected <block end>, but found '-'"))
             }
             Token(mark, _) => Err(ScanError::new(
                 mark,
@@ -975,7 +969,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
 
     fn indentless_sequence_entry(&mut self) -> ParseResult {
         match *self.peek_token()? {
-            Token(_, TokenType::BlockEntry) => (),
+            Token(_, TokenType::BlockEntry(_)) => (),
             Token(mark, _) => {
                 self.pop_state();
                 return Ok((Event::SequenceEnd, mark));
@@ -984,7 +978,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
         self.skip();
         if let Token(
             mark,
-            TokenType::BlockEntry | TokenType::Key | TokenType::Value | TokenType::BlockEnd,
+            TokenType::BlockEntry(_) | TokenType::Key | TokenType::Value | TokenType::BlockEnd,
         ) = *self.peek_token()?
         {
             self.state = State::IndentlessSequenceEntry;
@@ -1008,9 +1002,13 @@ impl<T: Iterator<Item = char>> Parser<T> {
                 self.skip();
                 Ok((Event::SequenceEnd, mark))
             }
-            Token(_, TokenType::BlockEntry) => {
+            Token(mark, TokenType::BlockMappingStart) => Err(ScanError::new(
+                mark,
+                "expected <block end>, but found '<block mapping start>'",
+            )),
+            Token(_, TokenType::BlockEntry(_)) => {
                 self.skip();
-                if let Token(mark, TokenType::BlockEntry | TokenType::BlockEnd) =
+                if let Token(mark, TokenType::BlockEntry(_) | TokenType::BlockEnd) =
                     *self.peek_token()?
                 {
                     self.state = State::BlockSequenceEntry;

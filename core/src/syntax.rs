@@ -26,7 +26,15 @@ pub(crate) fn check(content: &str, problems: &mut Vec<LintProblem>) {
                             }
                         });
                 let message = compatible_message(content, *mark, message);
-                problems.retain(|problem| (problem.line, problem.column) != position);
+                problems.retain(|problem| {
+                    let same_position = (problem.line, problem.column) == position;
+                    // The fallback line check also diagnoses this continuation.
+                    let same_continuation = error.at_plain_scalar_continuation()
+                        && problem.line == position.0
+                        && problem.column == 1
+                        && problem.rule == "indentation";
+                    !same_position && !same_continuation
+                });
                 problems.push(LintProblem::new(
                     position.0,
                     position.1,
@@ -70,6 +78,81 @@ fn compatible_message(content: &str, mark: Marker, message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use crate::{Config, Fixer, LintLevel, Linter};
+
+    #[test]
+    fn malformed_block_collections_report_the_boundary_token() {
+        let config =
+            Config::load_from_str("rules:\n  indentation: {indent-sequences: whatever}\n").unwrap();
+        let linter = Linter::new(config);
+        let cases = [
+            (
+                "---\nlist:\n    - 1\n    - 2\n    - 3\n- a\n- b\n- c\n",
+                (6, 1),
+                "expected <block end>, but found '-'",
+                "---\nlist:\n    - 1\n    - 2\n    - 3\n    - a\n",
+            ),
+            (
+                "---\n- o:\n k1: v1\n...\n",
+                (3, 2),
+                "expected <block end>, but found '<block mapping start>'",
+                "---\n- o:\n  k1: v1\n...\n",
+            ),
+            (
+                "---\na:\n  b:\n    c:\n   d:\n...\n",
+                (5, 4),
+                "expected <block end>, but found '<block mapping start>'",
+                "---\na:\n  b:\n    c:\n  d:\n...\n",
+            ),
+            (
+                "---\na:\n  b:\n    c:\n d:\n...\n",
+                (5, 2),
+                "expected <block end>, but found '<block mapping start>'",
+                "---\na:\n  b:\n    c:\nd:\n...\n",
+            ),
+        ];
+        for (source, position, message, neighbor) in cases {
+            assert_syntax(&linter, source, position, message);
+            assert!(
+                linter.lint_string(neighbor).unwrap().is_empty(),
+                "{neighbor:?}"
+            );
+        }
+        for (step, name) in [(2, "Unix"), (4, "Linux")] {
+            let key = " ".repeat(step);
+            let dash = " ".repeat(step * 2);
+            let prefix = format!("---\nobject:\n{key}k3:\n{dash}- name: {name}\n");
+            let child = format!("{dash}  ");
+            let over = format!("{prefix}{child} date: 1969\n...\n");
+            assert_syntax(
+                &linter,
+                &over,
+                (5, child.len() + 6),
+                "mapping values are not allowed here",
+            );
+            let under = format!("{prefix}{dash} date: 1969\n...\n");
+            assert_syntax(
+                &linter,
+                &under,
+                (5, child.len()),
+                "expected <block end>, but found '<block mapping start>'",
+            );
+            let neighbor = format!("{prefix}{child}date: 1969\n...\n");
+            assert!(
+                linter.lint_string(&neighbor).unwrap().is_empty(),
+                "{neighbor:?}"
+            );
+        }
+    }
+
+    fn assert_syntax(linter: &Linter, source: &str, position: (usize, usize), message: &str) {
+        let problems = linter.lint_string(source).unwrap();
+        assert_eq!(problems.len(), 1, "{source:?}: {problems:?}");
+        let problem = &problems[0];
+        assert_eq!((problem.line, problem.column), position, "{source:?}");
+        assert_eq!(problem.rule, "syntax");
+        assert_eq!(problem.level, LintLevel::Error);
+        assert_eq!(problem.message, format!("syntax error: {message}"));
+    }
 
     #[test]
     fn requires_an_explicit_start_after_an_explicit_document_end() {

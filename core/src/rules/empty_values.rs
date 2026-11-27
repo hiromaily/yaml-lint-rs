@@ -65,11 +65,15 @@ impl Rule for EmptyValuesRule {
                 {
                     Some("empty value in block mapping")
                 }
-                BlockEntry
+                BlockEntry(_)
                     if self.forbid_in_block_sequences
                         && matches!(
                             next,
-                            Key | BlockEntry | BlockEnd | DocumentEnd | DocumentStart | StreamEnd
+                            Key | BlockEntry(_)
+                                | BlockEnd
+                                | DocumentEnd
+                                | DocumentStart
+                                | StreamEnd
                         ) =>
                 {
                     Some("empty value in block sequence")

@@ -355,15 +355,15 @@ fn scalar_header_indent(context: &LintContext, preceding: &[Token], body_line: u
     let Some(Token(mark, kind)) = preceding
         .iter()
         .rev()
-        .find(|Token(_, kind)| matches!(kind, Value | Key | BlockEntry))
+        .find(|Token(_, kind)| matches!(kind, Value | Key | BlockEntry(_)))
         .filter(|Token(mark, _)| mark.line() == header_line)
     else {
         return line_indent;
     };
     let explicit = header.chars().nth(mark.col()) == Some('?')
         || matches!(kind, Value) && mark.col() == line_indent;
-    if explicit || matches!(kind, BlockEntry) {
-        if matches!(kind, BlockEntry) {
+    if explicit || matches!(kind, BlockEntry(_)) {
+        if matches!(kind, BlockEntry(_)) {
             return mark.col();
         }
         return header
@@ -514,7 +514,7 @@ fn check_block_indentation(
                     continue;
                 };
                 let mut value = *location;
-                let sequence = matches!(kind, BlockSequenceStart | BlockEntry);
+                let sequence = matches!(kind, BlockSequenceStart | BlockEntry(_));
                 if matches!(kind, BlockMappingStart)
                     && let Some(Token(key, Key)) = values.peek()
                 {
@@ -535,7 +535,7 @@ fn check_block_indentation(
                 }
                 // An indentless sequence has no start token. Its entry marker
                 // points after the dash and any separating whitespace.
-                let column = if matches!(kind, BlockEntry) {
+                let column = if matches!(kind, BlockEntry(_)) {
                     let Some(line) = context.lines.get(value.line() - 1) else {
                         continue;
                     };
@@ -591,20 +591,12 @@ fn check_block_indentation(
                     LintLevel::Error,
                 ));
             }
-            BlockEntry => {
+            BlockEntry(dash) => {
                 let Some(line) = context.lines.get(mark.line() - 1) else {
                     continue;
                 };
-                let before_entry: String = line.chars().take(mark.col()).collect();
-                let before_dash = before_entry
-                    .split_once('#')
-                    .map_or(before_entry.as_str(), |(source, _)| source)
-                    .trim_end_matches([' ', '\t']);
-                let Some(prefix) = before_dash.strip_suffix('-') else {
-                    continue;
-                };
-                let column = prefix.chars().count();
-                if prefix.bytes().all(|byte| byte == b' ') {
+                let column = dash.col();
+                if line.bytes().take(column).all(|byte| byte == b' ') {
                     checked_lines.insert(mark.line());
                 }
                 let Some(Token(child, kind)) = tokens.get(index + 1) else {
@@ -620,7 +612,7 @@ fn check_block_indentation(
                 if child.line() <= mark.line()
                     || matches!(
                         kind,
-                        BlockEnd | BlockEntry | DocumentEnd | DocumentStart | StreamEnd
+                        BlockEnd | BlockEntry(_) | DocumentEnd | DocumentStart | StreamEnd
                     )
                 {
                     continue;

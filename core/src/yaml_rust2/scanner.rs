@@ -84,6 +84,7 @@ pub struct ScanError {
     mark: Marker,
     /// Human-readable details about the error.
     info: String,
+    plain_scalar_continuation: bool,
 }
 
 impl ScanError {
@@ -93,19 +94,28 @@ impl ScanError {
         ScanError {
             mark: loc,
             info: info.to_owned(),
+            plain_scalar_continuation: false,
         }
     }
 
     /// Create a new error from a location and an error string.
     #[must_use]
     pub fn new_string(loc: Marker, info: String) -> ScanError {
-        ScanError { mark: loc, info }
+        ScanError {
+            mark: loc,
+            info,
+            plain_scalar_continuation: false,
+        }
     }
 
     /// Return the marker pointing to the error in the source.
     #[must_use]
     pub fn marker(&self) -> &Marker {
         &self.mark
+    }
+
+    pub(crate) fn at_plain_scalar_continuation(&self) -> bool {
+        self.plain_scalar_continuation
     }
 
     /// Return the information string describing the error that happened.
@@ -183,7 +193,7 @@ pub enum TokenType {
     /// End of an inline mapping.
     FlowMappingEnd,
     /// An entry in a block sequence (c.f.: [`TokenType::BlockSequenceStart`]).
-    BlockEntry,
+    BlockEntry(Marker),
     /// An entry in a flow sequence (c.f.: [`TokenType::FlowSequenceStart`]).
     FlowEntry,
     /// A key in a mapping.
@@ -392,6 +402,8 @@ pub struct Scanner<T> {
     flow_mapping_started: bool,
     /// Whether we currently are in an implicit flow mapping.
     implicit_flow_mapping: bool,
+    /// End of a plain scalar whose final line is a continuation.
+    plain_continuation_end: Option<usize>,
 }
 
 impl<T: Iterator<Item = char>> Iterator for Scanner<T> {
@@ -444,6 +456,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             leading_whitespace: true,
             flow_mapping_started: false,
             implicit_flow_mapping: false,
+            plain_continuation_end: None,
         }
     }
 
@@ -1535,7 +1548,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.allow_simple_key();
 
         self.tokens
-            .push_back(Token(self.mark, TokenType::BlockEntry));
+            .push_back(Token(self.mark, TokenType::BlockEntry(mark)));
 
         Ok(())
     }
@@ -2171,6 +2184,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.unroll_non_block_indents();
         let indent = self.indent + 1;
         let start_mark = self.mark;
+        let mut last_content_line = start_mark.line;
 
         if self.flow_level > 0 && (start_mark.col as isize) < indent {
             return Err(ScanError::new(
@@ -2219,6 +2233,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     whitespaces.clear();
                 }
 
+                last_content_line = self.mark.line;
                 // We can unroll the first iteration of the loop.
                 string.push(self.ch());
                 self.skip_non_blank();
@@ -2285,6 +2300,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         if self.leading_whitespace {
             self.allow_simple_key();
         }
+
+        self.plain_continuation_end = (last_content_line > start_mark.line
+            && last_content_line == self.mark.line)
+            .then_some(self.mark.index);
 
         Ok(Token(
             start_mark,
@@ -2373,7 +2392,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 sk.mark.col,
                 Some(sk.token_number),
                 TokenType::BlockMappingStart,
-                start_mark,
+                sk.mark,
             );
             self.roll_one_col_indent();
 
@@ -2387,10 +2406,13 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             // The ':' indicator follows a complex key.
             if self.flow_level == 0 {
                 if !self.simple_key_allowed {
-                    return Err(ScanError::new(
+                    let mut error = ScanError::new(
                         start_mark,
                         "mapping values are not allowed in this context",
-                    ));
+                    );
+                    error.plain_scalar_continuation =
+                        self.plain_continuation_end == Some(start_mark.index);
+                    return Err(error);
                 }
 
                 self.roll_indent(
