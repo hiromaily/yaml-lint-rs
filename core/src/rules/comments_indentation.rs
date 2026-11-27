@@ -2,8 +2,8 @@
 
 use super::{LintContext, Rule, directives::comments, tokens::scan};
 use crate::problem::{LintLevel, LintProblem};
+use crate::yaml_rust2::scanner::{TScalarStyle, Token, TokenType};
 use std::collections::HashMap;
-use yaml_rust2::scanner::{TScalarStyle, Token, TokenType};
 
 /// Checks that standalone comments align with surrounding YAML.
 #[derive(Debug, Default)]

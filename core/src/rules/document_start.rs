@@ -2,7 +2,7 @@
 
 use crate::problem::{LintLevel, LintProblem};
 use crate::rules::{LintContext, Rule, RuleLevel};
-use yaml_rust2::scanner::{Scanner, Token, TokenType::*};
+use crate::yaml_rust2::scanner::{Scanner, Token, TokenType::*};
 
 /// Configuration for document start requirement
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

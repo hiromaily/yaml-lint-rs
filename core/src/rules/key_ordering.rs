@@ -4,10 +4,10 @@ use super::{
     LintContext, Rule,
     tokens::{Patterns, is_property, problem, scan},
 };
+use crate::yaml_rust2::scanner::{Token, TokenType::*};
 use crate::{LintError, Result, problem::LintProblem};
 use serde::Deserialize;
 use std::cmp::Ordering;
-use yaml_rust2::scanner::{Token, TokenType::*};
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod locale {

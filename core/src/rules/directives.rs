@@ -2,8 +2,8 @@
 
 use super::tokens::quoted_len;
 use crate::problem::LintProblem;
+use crate::yaml_rust2::scanner::{Scanner, TScalarStyle, Token, TokenType};
 use std::{collections::HashSet, ops::Range};
-use yaml_rust2::scanner::{Scanner, TScalarStyle, Token, TokenType};
 
 #[derive(Clone, Copy)]
 pub(super) struct Directive<'a> {

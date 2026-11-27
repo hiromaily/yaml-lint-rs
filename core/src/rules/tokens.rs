@@ -1,8 +1,8 @@
 //! Shared YAML scanner helpers for token-based rules.
 
 use crate::problem::{LintLevel, LintProblem};
+use crate::yaml_rust2::scanner::{Marker, Scanner, Token, TokenType};
 use serde::{Deserialize, Deserializer};
-use yaml_rust2::scanner::{Marker, Scanner, Token, TokenType};
 
 pub(super) fn scan(content: &str) -> Vec<Token> {
     Scanner::new(content.chars()).collect()

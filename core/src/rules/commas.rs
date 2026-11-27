@@ -2,8 +2,8 @@
 
 use super::{LintContext, Rule};
 use crate::problem::{LintLevel, LintProblem};
+use crate::yaml_rust2::scanner::{Scanner, Token, TokenType::*};
 use serde::Deserialize;
-use yaml_rust2::scanner::{Scanner, Token, TokenType::*};
 
 /// Controls spacing around commas in flow collections.
 #[derive(Debug, Clone, PartialEq, Deserialize)]

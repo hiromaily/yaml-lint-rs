@@ -5,8 +5,8 @@ use super::{
     tokens::{has_tag, problem, scan},
 };
 use crate::problem::LintProblem;
+use crate::yaml_rust2::scanner::{TScalarStyle::Plain, Token, TokenType::Scalar};
 use serde::Deserialize;
-use yaml_rust2::scanner::{TScalarStyle::Plain, Token, TokenType::Scalar};
 
 /// Controls implicit and explicit octal notation.
 #[derive(Debug, Clone, PartialEq, Deserialize)]

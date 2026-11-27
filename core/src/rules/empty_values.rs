@@ -5,8 +5,8 @@ use super::{
     tokens::{problem, scan},
 };
 use crate::problem::LintProblem;
+use crate::yaml_rust2::scanner::{Token, TokenType::*};
 use serde::Deserialize;
-use yaml_rust2::scanner::{Token, TokenType::*};
 
 /// Controls which collections permit implicit null values.
 #[derive(Debug, Clone, PartialEq, Deserialize)]

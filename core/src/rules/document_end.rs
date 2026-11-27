@@ -2,8 +2,8 @@
 
 use super::{LintContext, Rule, tokens::problem};
 use crate::problem::{LintLevel, LintProblem};
+use crate::yaml_rust2::scanner::{Scanner, Token, TokenType::*};
 use serde::Deserialize;
-use yaml_rust2::scanner::{Scanner, Token, TokenType::*};
 
 /// Requires or forbids an explicit document end marker.
 #[derive(Debug, Clone, PartialEq, Deserialize)]

@@ -2,7 +2,7 @@
 
 use crate::problem::{LintLevel, LintProblem};
 use crate::rules::{LintContext, Rule, RuleLevel};
-use yaml_rust2::scanner::{Scanner, Token, TokenType};
+use crate::yaml_rust2::scanner::{Scanner, Token, TokenType};
 
 /// Rule that enforces maximum line length
 #[derive(Debug)]

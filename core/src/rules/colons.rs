@@ -3,7 +3,7 @@
 use super::tokens;
 use crate::problem::{LintLevel, LintProblem};
 use crate::rules::{LintContext, Rule, RuleLevel};
-use yaml_rust2::scanner::{Scanner, TScalarStyle, Token, TokenType};
+use crate::yaml_rust2::scanner::{Scanner, TScalarStyle, Token, TokenType};
 
 /// Rule that checks spacing around colons in key-value mappings
 #[derive(Debug)]

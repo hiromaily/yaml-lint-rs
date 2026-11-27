@@ -1,6 +1,6 @@
+use crate::yaml_rust2::parser::{Event, Parser};
+use crate::yaml_rust2::scanner::{Marker, Scanner, Token, TokenType};
 use crate::{LintLevel, LintProblem};
-use yaml_rust2::parser::{Event, Parser};
-use yaml_rust2::scanner::{Marker, Scanner, Token, TokenType};
 
 pub(crate) fn check(content: &str, problems: &mut Vec<LintProblem>) {
     let mut parser = Parser::new_from_str(content);
@@ -70,6 +70,49 @@ fn compatible_message(content: &str, mark: Marker, message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use crate::{Config, Fixer, LintLevel, Linter};
+
+    #[test]
+    fn outdented_flow_closers_reach_the_lint_and_fix_rules() {
+        let config = Config::load_from_str("rules:\n  indentation: enable\n").unwrap();
+        let registry = config.create_registry();
+        let linter = Linter::new(config);
+        for source in ["---\ndict: {\n}\n", "---\narray: [\n]\n"] {
+            assert!(linter.lint_string(source).unwrap().is_empty());
+            assert!(
+                Fixer::new(&registry)
+                    .dry_run("flow.yaml", source)
+                    .unfixable_problems
+                    .is_empty()
+            );
+        }
+        let source = "---\ntop:\n  rules: [\n    1, 2,\n]\n  rulez: [\n    1, 2,\n    ]\n";
+        let problems = linter.lint_string(source).unwrap();
+        let positions: Vec<_> = problems
+            .iter()
+            .map(|problem| (problem.line, problem.column, problem.rule.as_str()))
+            .collect();
+        assert_eq!(positions, [(5, 1, "indentation"), (8, 5, "indentation")]);
+        assert_eq!(
+            Fixer::new(&registry)
+                .dry_run("flow.yaml", source)
+                .unfixable_problems,
+            problems
+        );
+    }
+
+    #[test]
+    fn invalid_flow_closures_still_report_syntax() {
+        let linter = Linter::new(Config::load_from_str("rules: {}").unwrap());
+        for source in ["key: [\n}\n", "key: [\n", "key: value\n]\n"] {
+            assert!(
+                linter
+                    .lint_string(source)
+                    .unwrap()
+                    .iter()
+                    .any(|problem| problem.rule == "syntax")
+            );
+        }
+    }
 
     #[test]
     fn reports_syntax_after_an_unknown_alias_without_suppressing_other_rules() {

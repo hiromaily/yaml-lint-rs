@@ -3,7 +3,7 @@
 use super::tokens;
 use crate::problem::LintProblem;
 use crate::rules::{LintContext, Rule, RuleLevel};
-use yaml_rust2::scanner::{Scanner, Token, TokenType};
+use crate::yaml_rust2::scanner::{Scanner, Token, TokenType};
 
 /// Rule that controls spacing after list item hyphens in YAML sequences
 ///

@@ -3,8 +3,8 @@
 use super::{directives::non_comment_ranges, tokens::scan};
 use crate::problem::{LintLevel, LintProblem};
 use crate::rules::{LintContext, Rule};
+use crate::yaml_rust2::scanner::{TScalarStyle, Token, TokenType::*};
 use std::collections::HashSet;
-use yaml_rust2::scanner::{TScalarStyle, Token, TokenType::*};
 
 /// Indentation configuration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
