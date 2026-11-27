@@ -80,6 +80,53 @@ mod tests {
     use crate::{Config, Fixer, LintLevel, Linter};
 
     #[test]
+    fn quoted_continuations_keep_original_indentation_positions() {
+        let enabled = Linter::new(
+            Config::load_from_str("rules:\n  indentation: {check-multi-line-strings: true}\n")
+                .unwrap(),
+        );
+        let disabled = Linter::new(
+            Config::load_from_str("rules:\n  indentation: {check-multi-line-strings: false}\n")
+                .unwrap(),
+        );
+        let double = r#"- long text: "very \"long\"
+'string' with
+
+paragraph gap, \n and
+spaces."
+"#;
+        let single = r#"- long text: 'very "long"
+''string'' with
+
+paragraph gap, \n and
+spaces.'
+"#;
+        for source in [double, single] {
+            let problems = enabled.lint_string(source).unwrap();
+            let positions: Vec<_> = problems
+                .iter()
+                .map(|problem| (problem.line, problem.column, problem.rule.as_str()))
+                .collect();
+            assert_eq!(
+                positions,
+                [
+                    (2, 1, "indentation"),
+                    (4, 1, "indentation"),
+                    (5, 1, "indentation")
+                ]
+            );
+            assert!(disabled.lint_string(source).unwrap().is_empty());
+            let unterminated = &source[..source.len() - 2];
+            assert_syntax(
+                &disabled,
+                unterminated,
+                (1, 14),
+                "found unexpected end of stream",
+            );
+        }
+    }
+
+    #[test]
     fn malformed_block_collections_report_the_boundary_token() {
         let config =
             Config::load_from_str("rules:\n  indentation: {indent-sequences: whatever}\n").unwrap();

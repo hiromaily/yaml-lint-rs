@@ -14,6 +14,8 @@ Local scanner changes
 - Retain the dash location for block entries and mark implicit block
   mappings at their first key. Identify a separator rejected after a
   continued plain scalar so the linter can avoid a duplicate diagnosis.
+- Allow outdented quoted continuations so the indentation rule can
+  diagnose them using their original source positions.
 
 Local parser changes
 
