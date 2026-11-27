@@ -56,33 +56,20 @@ impl Rule for NewLinesRule {
             r"wrong new line character: expected \n"
         };
 
-        let mut problems = Vec::new();
-        let mut line_number = 1;
-        let mut line_start = 0;
-        for (offset, character) in context.content.match_indices(['\r', '\n']) {
-            if offset < line_start {
-                continue; // The LF of an already processed CRLF.
-            }
-            let ending = if character == "\r"
-                && context.content.as_bytes().get(offset + 1) == Some(&b'\n')
-            {
-                "\r\n"
-            } else {
-                character
-            };
-            if ending != expected {
-                problems.push(LintProblem::new(
-                    line_number,
-                    context.content[line_start..offset].chars().count() + 1,
-                    message,
-                    self.name(),
-                    LintLevel::Error,
-                ));
-            }
-            line_start = offset + ending.len();
-            line_number += 1;
+        let Some((offset, _)) = context.content.match_indices('\n').next() else {
+            return Vec::new();
+        };
+        let (line, ending) = split_ending(&context.content[..=offset]);
+        if ending == expected {
+            return Vec::new();
         }
-        problems
+        vec![LintProblem::new(
+            1,
+            line.chars().count() + 1,
+            message,
+            self.name(),
+            LintLevel::Error,
+        )]
     }
 }
 
@@ -91,19 +78,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reports_mixed_line_endings_with_character_columns() {
-        let context =
-            LintContext::new("key: |\n  日本語\r\n\r\nother: value\rlast: value".to_string());
+    fn checks_only_the_first_ending_with_character_columns() {
+        let context = LintContext::new("key: 日本語\r\nother: value\n".into());
         let problems = NewLinesRule::default().check(&context);
-        let positions: Vec<_> = problems.iter().map(|p| (p.line, p.column)).collect();
-        assert_eq!(positions, [(2, 6), (3, 1), (4, 13)]);
+        assert_eq!(problems.len(), 1);
+        assert_eq!((problems[0].line, problems[0].column), (1, 9));
 
-        let problems = NewLinesRule {
-            newline_type: NewLineType::Dos,
-        }
-        .check(&context);
-        let positions: Vec<_> = problems.iter().map(|p| (p.line, p.column)).collect();
-        assert_eq!(positions, [(1, 7), (4, 13)]);
+        assert!(
+            NewLinesRule {
+                newline_type: NewLineType::Dos
+            }
+            .check(&context)
+            .is_empty()
+        );
     }
 
     #[test]

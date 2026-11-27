@@ -3,6 +3,44 @@
 use yaml_lint_core::{Config, Linter};
 
 #[test]
+fn enabling_an_inherited_rule_preserves_its_level() {
+    let config =
+        Config::load_from_str("extends: relaxed\nrules: {colons: enable, comments: enable}")
+            .unwrap();
+    let problems = Linter::new(config)
+        .lint_string("key:  value  #comment\n")
+        .unwrap();
+    let actual: Vec<_> = problems
+        .iter()
+        .map(|p| (p.rule.as_str(), p.level))
+        .collect();
+    use yaml_lint_core::LintLevel::{Error, Warning};
+    assert_eq!(actual, [("colons", Warning), ("comments", Error)]);
+}
+
+#[test]
+fn relaxed_preset_options_survive_partial_rule_overrides() {
+    let config = Config::load_from_str(
+        "extends: relaxed\nrules:\n  braces: enable\n  brackets: {level: error}\n  line-length: {max: 20}\n",
+    )
+    .unwrap();
+    let source = concat!(
+        "items: { a: [ b ] }\n",
+        "url: https://example.com/a/long/path\n",
+        "first:\n- yes\n",
+        "second:\n  - no\n",
+        "#comment\n",
+    );
+    let problems = Linter::new(config).lint_string(source).unwrap();
+    assert_eq!(problems.len(), 1);
+    assert_eq!(
+        (problems[0].rule.as_str(), problems[0].line),
+        ("indentation", 6)
+    );
+    assert_eq!(problems[0].level, yaml_lint_core::LintLevel::Warning);
+}
+
+#[test]
 fn test_line_length_custom_max() {
     let config_yaml = r#"
 rules:
@@ -29,6 +67,173 @@ rules:
         "Expected 1 problem with 125-char line and max: 120"
     );
     assert_eq!(problems[0].rule, "line-length");
+}
+
+#[test]
+fn line_length_can_allow_long_words_and_mapping_values() {
+    let source = "- key: https://example.com/long\n- https://example.com/long\n";
+    let config = Config::load_from_str("rules: {line-length: {max: 20}}").unwrap();
+    let problems = Linter::new(config).lint_string(source).unwrap();
+    assert_eq!(problems.len(), 1);
+    assert_eq!((problems[0].line, problems[0].column), (1, 21));
+
+    let config = Config::load_from_str(
+        "rules: {line-length: {max: 20, allow-non-breakable-inline-mappings: true}}",
+    )
+    .unwrap();
+    assert!(Linter::new(config).lint_string(source).unwrap().is_empty());
+}
+
+#[test]
+fn file_extends_inherits_options_and_decodes_ignore_file() {
+    let directory =
+        std::env::temp_dir().join(format!("yaml-lint-config-test-{}", std::process::id()));
+    std::fs::create_dir(&directory).unwrap();
+    let base = directory.join("base.yaml");
+    let ignore = directory.join("ignored.txt");
+    let child = directory.join("child.yaml");
+    std::fs::write(
+        &ignore,
+        "*.generated.yaml\n"
+            .chars()
+            .flat_map(|ch| u32::from(ch).to_be_bytes())
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    std::fs::write(
+        &base,
+        format!(
+            "ignore-from-file: '{}'\nrules: {{line-length: {{max: 5, level: warning}}}}\n",
+            ignore.display()
+        ),
+    )
+    .unwrap();
+    let settings = format!(
+        "extends: '{}'\nrules: {{line-length: {{allow-non-breakable-words: false}}}}\n",
+        base.display()
+    );
+    std::fs::write(&child, &settings).unwrap();
+    let loaded = Config::load_from_file(&child);
+    std::fs::write(&base, format!("extends: '{}'\n", child.display())).unwrap();
+    let cycle = Config::load_from_file(&child);
+    std::fs::remove_file(base).unwrap();
+    std::fs::remove_file(ignore).unwrap();
+    std::fs::remove_file(child).unwrap();
+    std::fs::remove_dir(directory).unwrap();
+
+    let config = loaded.unwrap();
+    assert_eq!(config.ignore, ["*.generated.yaml"]);
+    let problems = Linter::new(config).lint_string("abcdef\n").unwrap();
+    assert_eq!(problems.len(), 1);
+    assert_eq!(problems[0].column, 6);
+    assert_eq!(problems[0].level, yaml_lint_core::LintLevel::Warning);
+    assert!(
+        cycle
+            .unwrap_err()
+            .to_string()
+            .contains("Circular config inheritance")
+    );
+}
+
+#[test]
+fn indentation_sequence_policies_apply_to_mapping_values() {
+    let source = "first:\n- a\nsecond:\n  - b\n";
+    for (policy, expected) in [
+        ("true", &[2][..]),
+        ("false", &[4]),
+        ("whatever", &[]),
+        ("consistent", &[4]),
+    ] {
+        let config = Config::load_from_str(&format!(
+            "rules: {{indentation: {{spaces: 2, indent-sequences: {policy}}}}}"
+        ))
+        .unwrap();
+        let problems = Linter::new(config).lint_string(source).unwrap();
+        let lines: Vec<_> = problems.iter().map(|problem| problem.line).collect();
+        assert_eq!(lines, expected, "policy {policy}");
+        assert!(problems.iter().all(|problem| problem.rule == "indentation"));
+    }
+    assert!(Config::load_from_str("rules: {indentation: {indent-sequences: invalid}}").is_err());
+}
+
+#[test]
+fn flow_indentation_checks_values_and_closing_delimiters() {
+    let config = Config::load_from_str("rules: {indentation: {spaces: 2}}").unwrap();
+    let source = "items: [\n  first,\n   second,\n  ]\n";
+    let problems = Linter::new(config).lint_string(source).unwrap();
+    let diagnostics: Vec<_> = problems
+        .iter()
+        .map(|problem| {
+            (
+                problem.rule.as_str(),
+                problem.line,
+                problem.column,
+                problem.message.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        diagnostics,
+        [
+            (
+                "indentation",
+                3,
+                4,
+                "wrong indentation: expected 2 but found 3"
+            ),
+            (
+                "indentation",
+                4,
+                3,
+                "wrong indentation: expected 0 but found 2"
+            ),
+        ]
+    );
+    let source = "items: [\n  first,\n  key: value,\n]\n";
+    let config = Config::load_from_str("rules: {indentation: enable}").unwrap();
+    assert!(Linter::new(config).lint_string(source).unwrap().is_empty());
+}
+
+#[test]
+fn multiline_string_indentation_preserves_scalar_content_boundaries() {
+    let source = concat!(
+        "plain: 日本語\n",
+        "  continuation\n",
+        "quoted: \"start\n",
+        "  continuation\"\n",
+        "literal: |\n",
+        "  regular\n",
+        "   extra space\n",
+        "folded: >\n",
+        "  regular\n",
+        "   extra space\n",
+        "next: value\n",
+    );
+    let config = Config::load_from_str("rules: {indentation: {spaces: 2}}").unwrap();
+    assert!(Linter::new(config).lint_string(source).unwrap().is_empty());
+
+    let config =
+        Config::load_from_str("rules: {indentation: {spaces: 2, check-multi-line-strings: true}}")
+            .unwrap();
+    let problems = Linter::new(config).lint_string(source).unwrap();
+    let positions: Vec<_> = problems.iter().map(|p| (p.line, p.column)).collect();
+    assert_eq!(positions, [(2, 3), (4, 3), (7, 4), (10, 4)]);
+    assert!(problems.iter().all(|p| p.rule == "indentation"));
+    assert!(
+        Config::load_from_str("rules: {indentation: {check-multi-line-strings: invalid}}").is_err()
+    );
+}
+
+#[test]
+fn indentation_uses_the_first_block_width_for_later_mapping_and_flow_values() {
+    let config = Config::load_from_str("rules: {indentation: enable}").unwrap();
+    let source = "first:\n  key: value\nsecond:\n    key: value\nflow: [\n   value\n]\n";
+    let problems = Linter::new(config).lint_string(source).unwrap();
+    let positions: Vec<_> = problems
+        .iter()
+        .map(|p| (p.rule.as_str(), p.line, p.column))
+        .collect();
+    assert_eq!(positions, [("indentation", 4, 5), ("indentation", 6, 4)]);
 }
 
 #[test]

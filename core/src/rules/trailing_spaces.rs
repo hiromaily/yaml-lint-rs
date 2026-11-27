@@ -19,7 +19,7 @@ impl Rule for TrailingSpacesRule {
         for (line_idx, line) in context.lines.iter().enumerate() {
             // Check if line ends with whitespace (space or tab)
             if line.ends_with(' ') || line.ends_with('\t') {
-                let trimmed_len = line.trim_end().len();
+                let trimmed_len = line.trim_end_matches([' ', '\t']).chars().count();
                 let column = trimmed_len + 1; // 1-indexed
 
                 problems.push(LintProblem::new(
@@ -50,7 +50,7 @@ impl Rule for TrailingSpacesRule {
         for (index, chunk) in content.split_inclusive('\n').enumerate() {
             let (line, ending) = split_ending(chunk);
             if !suppressed.contains(&(index + 1)) && line.ends_with([' ', '\t']) {
-                result.push_str(line.trim_end());
+                result.push_str(line.trim_end_matches([' ', '\t']));
                 result.push_str(ending);
                 changed = true;
             } else {

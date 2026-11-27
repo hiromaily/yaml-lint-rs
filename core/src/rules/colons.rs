@@ -3,7 +3,7 @@
 use super::tokens;
 use crate::problem::{LintLevel, LintProblem};
 use crate::rules::{LintContext, Rule, RuleLevel};
-use yaml_rust2::scanner::{Scanner, Token, TokenType};
+use yaml_rust2::scanner::{Scanner, TScalarStyle, Token, TokenType};
 
 /// Rule that checks spacing around colons in key-value mappings
 #[derive(Debug)]
@@ -75,15 +75,22 @@ impl Rule for ColonsRule {
                 }
                 _ => {}
             }
-            if let (Some(message), Some(line), Some(Token(next, _))) = (after, line, scanner.peek())
-                && next.line() == mark.line()
+            if let (Some(message), Some(line), Some(Token(next, next_type))) =
+                (after, line, scanner.peek())
             {
                 let mut tail = line.chars().skip(mark.col() + 1).peekable();
                 let mut spaces = 0;
                 while tail.next_if(|ch| matches!(ch, ' ' | '\t')).is_some() {
                     spaces += 1;
                 }
-                if spaces > self.max_spaces_after && tail.peek().is_some_and(|ch| *ch != '#') {
+                let block_header = matches!(
+                    next_type,
+                    Scalar(TScalarStyle::Literal | TScalarStyle::Folded, _)
+                ) && matches!(tail.peek(), Some('|' | '>'));
+                if (next.line() == mark.line() || block_header)
+                    && spaces > self.max_spaces_after
+                    && tail.peek().is_some_and(|ch| *ch != '#')
+                {
                     problems.push(LintProblem::new(
                         mark.line(),
                         mark.col() + spaces + 1,

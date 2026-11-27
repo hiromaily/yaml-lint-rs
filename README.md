@@ -208,11 +208,11 @@ ignore: |
 ### Available Presets
 
 #### default (strict)
-- All rules enabled as errors
+- Reports missing document starts, comment issues, and truthy values as warnings
 - Suitable for production code
 
 #### relaxed
-- Most rules as warnings
+- Allows spacing inside flow collections and disables comment and truthy checks
 - More permissive for development
 
 ## Implemented Rules
@@ -228,7 +228,7 @@ ignore: |
    - Options: `max` (default: 80)
 
 3. **document-start** - Requires or forbids `---` at document start
-   - Level: Disable (by default)
+   - Level: Warning in the default preset
    - Options: `present` (true/false)
 
 4. **colons** - Validates spacing around colons in mappings
@@ -256,7 +256,7 @@ ignore: |
    - Options: `max-spaces-after` (default: 1)
 
 10. **comments** - Enforces consistent comment formatting
-    - Level: Error
+    - Level: Warning
     - Options: `require-starting-space`, `min-spaces-from-content`
 
 11. **truthy** - Restricts boolean representations (YAML 1.1 vs 1.2)

@@ -7,7 +7,7 @@ use super::{
 use crate::problem::LintProblem;
 use serde::Deserialize;
 use std::collections::HashSet;
-use yaml_rust2::scanner::{Token, TokenType::*};
+use yaml_rust2::scanner::{TScalarStyle, Token, TokenType::*};
 
 /// Rule that detects duplicate keys in mappings.
 #[derive(Debug)]
@@ -40,7 +40,7 @@ impl Rule for KeyDuplicatesOptions {
         let mut collections = Vec::new();
         let mut problems = Vec::new();
 
-        for (index, Token(_, token)) in tokens.iter().enumerate() {
+        for (index, Token(key_mark, token)) in tokens.iter().enumerate() {
             match token {
                 BlockMappingStart | FlowMappingStart => collections.push(Some(HashSet::new())),
                 BlockSequenceStart | FlowSequenceStart => collections.push(None),
@@ -51,17 +51,46 @@ impl Rule for KeyDuplicatesOptions {
                     let Some(Some(keys)) = collections.last_mut() else {
                         continue;
                     };
-                    let Some(Token(mark, Scalar(_, key))) = tokens.get(index + 1) else {
+                    let Some(Token(mark, Scalar(style, key))) = tokens.get(index + 1) else {
                         continue;
                     };
                     if (key != "<<" || self.forbid_duplicated_merge_keys)
                         && !keys.insert(key.as_str())
                     {
-                        problems.push(problem(
+                        let mut diagnostic = problem(
                             *mark,
                             self.name(),
                             format!("duplication of key \"{key}\" in mapping"),
-                        ));
+                        );
+                        if matches!(style, TScalarStyle::Literal | TScalarStyle::Folded) {
+                            // The scanner points to the scalar body. Locate its
+                            // header after the explicit key marker.
+                            for (index, line) in context
+                                .lines
+                                .iter()
+                                .enumerate()
+                                .take(mark.line())
+                                .skip(key_mark.line() - 1)
+                            {
+                                let start = if index + 1 == key_mark.line() {
+                                    key_mark.col() + 1
+                                } else {
+                                    0
+                                };
+                                if let Some((column, ch)) = line
+                                    .chars()
+                                    .enumerate()
+                                    .skip(start)
+                                    .find(|(_, ch)| !matches!(ch, ' ' | '\t'))
+                                    && matches!(ch, '|' | '>')
+                                {
+                                    diagnostic.line = index + 1;
+                                    diagnostic.column = column + 1;
+                                    break;
+                                }
+                            }
+                        }
+                        problems.push(diagnostic);
                     }
                 }
                 _ => {}
@@ -106,6 +135,14 @@ mod tests {
         let problems = rule.check(&context);
 
         assert_eq!(problems.len(), 1);
+    }
+
+    #[test]
+    fn points_to_the_header_of_a_duplicate_block_scalar_key() {
+        let source = "duplicate key: 1\n? >-\n    duplicate\n    key\n: 2\n";
+        let problems = KeyDuplicatesRule.check(&LintContext::new(source.into()));
+        assert_eq!(problems.len(), 1);
+        assert_eq!((problems[0].line, problems[0].column), (2, 3));
     }
 
     #[test]

@@ -17,7 +17,7 @@ use yaml_rust2::scanner::{
 static TYPED: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(concat!(
         r"^(?:~|null|Null|NULL|yes|Yes|YES|no|No|NO|true|True|TRUE|false|False|FALSE|on|On|ON|off|Off|OFF|",
-        r"[+-]?(?:[0-9][0-9_]*|0[bB][01_]+|0o[0-7_]+|0[xX][0-9a-fA-F_]+|",
+        r"[+-]?(?:0|[1-9][0-9_]*|0[0-7_]+|0[bB][01_]+|0o[0-7_]+|0[xX][0-9a-fA-F_]+|",
         r"(?:[0-9][0-9_]*\.[0-9_]*|\.[0-9][0-9_]*)(?:[eE][+-]?[0-9]+)?|[0-9]+[eE][+-]?[0-9]+|",
         r"[0-9][0-9_]*(?::[0-5]?[0-9])+(?:\.[0-9_]*)?|\.(?:inf|Inf|INF))|",
         r"\.(?:nan|NaN|NAN)|[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:[Tt ].+)?)$",
@@ -232,6 +232,14 @@ fn can_be_plain(value: &str, in_flow: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn distinguishes_octal_values_from_strings_with_invalid_octal_digits() {
+        let context = LintContext::new("- 0777\n- 0o777\n- 0800\n- 0o800\n".into());
+        let problems = QuotedStringsRule::default().check(&context);
+        let lines: Vec<_> = problems.iter().map(|problem| problem.line).collect();
+        assert_eq!(lines, [3, 4]);
+    }
 
     #[test]
     fn keeps_quotes_that_join_physical_lines() {

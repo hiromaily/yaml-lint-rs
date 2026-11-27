@@ -2,6 +2,9 @@
 
 use crate::Result;
 use crate::path_patterns::PathPatterns;
+use crate::rules::indentation::{
+    ConfiguredIndentation, IndentSequences, IndentSpaces, IndentationRule,
+};
 use crate::rules::{
     FlowPolicy, RuleLevel, anchors::AnchorsRule, commas::CommasRule,
     comments_indentation::CommentsIndentationRule, document_end::DocumentEndRule,
@@ -11,7 +14,25 @@ use crate::rules::{
     octal_values::OctalValuesRule, quoted_strings::QuotedStringsRule,
 };
 use indexmap::IndexMap;
-use std::path::Path;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+
+const RELAXED_PRESET: &str = r#"
+extends: default
+rules:
+  braces: {level: warning, max-spaces-inside: 1}
+  brackets: {level: warning, max-spaces-inside: 1}
+  colons: warning
+  commas: warning
+  comments: disable
+  comments-indentation: disable
+  document-start: disable
+  empty-lines: warning
+  hyphens: warning
+  indentation: {level: warning, indent-sequences: consistent}
+  line-length: {level: warning, allow-non-breakable-inline-mappings: true}
+  truthy: disable
+"#;
 
 /// Configuration for a single rule
 #[derive(Debug, Clone, PartialEq)]
@@ -59,8 +80,18 @@ pub enum RuleOptions {
     LineLength {
         max: usize,
     },
+    LineLengthWithExemptions {
+        max: usize,
+        allow_non_breakable_words: bool,
+        allow_non_breakable_inline_mappings: bool,
+    },
     Indentation {
         spaces: IndentConfig,
+    },
+    IndentationWithSequences {
+        spaces: IndentConfig,
+        sequences: IndentSequences,
+        check_multi_line_strings: bool,
     },
     Colons {
         max_spaces_before: usize,
@@ -155,7 +186,7 @@ impl Config {
         let default_rules = [
             ("trailing-spaces", RuleLevel::Error),
             ("line-length", RuleLevel::Error),
-            ("document-start", RuleLevel::Disable),
+            ("document-start", RuleLevel::Warning),
             ("colons", RuleLevel::Error),
             ("key-duplicates", RuleLevel::Error),
             ("indentation", RuleLevel::Error),
@@ -163,7 +194,7 @@ impl Config {
             ("new-lines", RuleLevel::Error),
             ("empty-lines", RuleLevel::Error),
             ("hyphens", RuleLevel::Error),
-            ("comments", RuleLevel::Error),
+            ("comments", RuleLevel::Warning),
             ("truthy", RuleLevel::Warning),
             ("braces", RuleLevel::Error),
             ("brackets", RuleLevel::Error),
@@ -189,47 +220,12 @@ impl Config {
 
     /// Create config with relaxed preset
     pub fn with_relaxed_preset() -> Self {
-        let mut config = Self::new();
-
-        // Relaxed configuration - most rules as warnings
-        let relaxed_rules = [
-            ("trailing-spaces", RuleLevel::Warning),
-            ("line-length", RuleLevel::Warning),
-            ("document-start", RuleLevel::Disable),
-            ("colons", RuleLevel::Warning),
-            ("key-duplicates", RuleLevel::Error),
-            ("indentation", RuleLevel::Warning),
-            ("new-line-at-end-of-file", RuleLevel::Warning),
-            ("new-lines", RuleLevel::Warning),
-            ("empty-lines", RuleLevel::Warning),
-            ("hyphens", RuleLevel::Warning),
-            ("comments", RuleLevel::Warning),
-            ("truthy", RuleLevel::Warning),
-            ("braces", RuleLevel::Warning),
-            ("brackets", RuleLevel::Warning),
-            ("anchors", RuleLevel::Error),
-            ("commas", RuleLevel::Warning),
-            ("comments-indentation", RuleLevel::Disable),
-            ("document-end", RuleLevel::Disable),
-            ("empty-values", RuleLevel::Disable),
-            ("float-values", RuleLevel::Disable),
-            ("key-ordering", RuleLevel::Disable),
-            ("octal-values", RuleLevel::Disable),
-            ("quoted-strings", RuleLevel::Disable),
-        ];
-
-        for (rule_name, level) in relaxed_rules {
-            config
-                .rules
-                .insert(rule_name.to_string(), RuleConfig::Level(level));
-        }
-
-        config
+        Self::load_from_str(RELAXED_PRESET).expect("built-in relaxed preset is valid")
     }
 
     /// Load config from a YAML file
     pub fn load_from_file(path: &Path) -> Result<Self> {
-        let content = std::fs::read_to_string(path)?;
+        let content = read_config_text(path)?;
         Self::load_from_str(&content)
     }
 
@@ -319,7 +315,25 @@ impl Config {
             ));
         }
 
-        Ok(RuleOptions::LineLength { max })
+        let option = |name, default| match map.get(name) {
+            Some(value) => value.as_bool().ok_or_else(|| {
+                crate::LintError::ConfigError(format!("line-length '{name}' must be a boolean"))
+            }),
+            None => Ok(default),
+        };
+        if !map.contains_key("allow-non-breakable-words")
+            && !map.contains_key("allow-non-breakable-inline-mappings")
+        {
+            return Ok(RuleOptions::LineLength { max });
+        }
+        Ok(RuleOptions::LineLengthWithExemptions {
+            max,
+            allow_non_breakable_words: option("allow-non-breakable-words", true)?,
+            allow_non_breakable_inline_mappings: option(
+                "allow-non-breakable-inline-mappings",
+                false,
+            )?,
+        })
     }
 
     /// Parse indentation options
@@ -351,27 +365,59 @@ impl Config {
             }
         };
 
-        Ok(RuleOptions::Indentation { spaces })
+        let check_multi_line_strings = match map.get("check-multi-line-strings") {
+            Some(value) => value.as_bool().ok_or_else(|| {
+                crate::LintError::ConfigError(
+                    "indentation 'check-multi-line-strings' must be a boolean".into(),
+                )
+            })?,
+            None => false,
+        };
+        let sequences = match map.get("indent-sequences") {
+            None if !check_multi_line_strings => return Ok(RuleOptions::Indentation { spaces }),
+            None => IndentSequences::Indented,
+            Some(serde_yaml::Value::Bool(true)) => IndentSequences::Indented,
+            Some(serde_yaml::Value::Bool(false)) => IndentSequences::Unindented,
+            Some(value) if value.as_str() == Some("whatever") => IndentSequences::Whatever,
+            Some(value) if value.as_str() == Some("consistent") => IndentSequences::Consistent,
+            _ => return Err(crate::LintError::ConfigError(
+                "indentation 'indent-sequences' must be true, false, 'whatever', or 'consistent'"
+                    .into(),
+            )),
+        };
+        Ok(RuleOptions::IndentationWithSequences {
+            spaces,
+            sequences,
+            check_multi_line_strings,
+        })
     }
 
     /// Parse colons options
     fn parse_colons_options(map: &serde_yaml::Mapping) -> Result<RuleOptions> {
-        let max_spaces_before = map
-            .get(serde_yaml::Value::String("max-spaces-before".to_string()))
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
-            .unwrap_or(0);
-
-        let max_spaces_after = map
-            .get(serde_yaml::Value::String("max-spaces-after".to_string()))
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
-            .unwrap_or(1);
-
         Ok(RuleOptions::Colons {
-            max_spaces_before,
-            max_spaces_after,
+            max_spaces_before: Self::parse_spacing_limit(map, "colons", "max-spaces-before", 0)?,
+            max_spaces_after: Self::parse_spacing_limit(map, "colons", "max-spaces-after", 1)?,
         })
+    }
+
+    fn parse_spacing_limit(
+        map: &serde_yaml::Mapping,
+        rule: &str,
+        name: &str,
+        default: usize,
+    ) -> Result<usize> {
+        match map.get(name) {
+            Some(value) if value.as_i64() == Some(-1) => Ok(usize::MAX),
+            Some(value) => value
+                .as_u64()
+                .and_then(|n| usize::try_from(n).ok())
+                .ok_or_else(|| {
+                    crate::LintError::ConfigError(format!(
+                        "{rule} '{name}' must be -1 or a non-negative integer"
+                    ))
+                }),
+            None => Ok(default),
+        }
     }
 
     /// Parse empty-lines options
@@ -403,13 +449,9 @@ impl Config {
 
     /// Parse hyphens options
     fn parse_hyphens_options(map: &serde_yaml::Mapping) -> Result<RuleOptions> {
-        let max_spaces_after = map
-            .get(serde_yaml::Value::String("max-spaces-after".to_string()))
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
-            .unwrap_or(1);
-
-        Ok(RuleOptions::Hyphens { max_spaces_after })
+        Ok(RuleOptions::Hyphens {
+            max_spaces_after: Self::parse_spacing_limit(map, "hyphens", "max-spaces-after", 1)?,
+        })
     }
 
     /// Parse comments options
@@ -426,13 +468,19 @@ impl Config {
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
 
-        let min_spaces_from_content = map
-            .get(serde_yaml::Value::String(
-                "min-spaces-from-content".to_string(),
-            ))
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
-            .unwrap_or(2);
+        let min_spaces_from_content = match map.get("min-spaces-from-content") {
+            Some(value) if value.as_i64() == Some(-1) => 0,
+            Some(value) => value
+                .as_u64()
+                .and_then(|n| usize::try_from(n).ok())
+                .ok_or_else(|| {
+                    crate::LintError::ConfigError(
+                        "comments 'min-spaces-from-content' must be -1 or a non-negative integer"
+                            .into(),
+                    )
+                })?,
+            None => 2,
+        };
 
         Ok(RuleOptions::Comments {
             require_starting_space,
@@ -572,8 +620,7 @@ impl Config {
 
     /// Load config from YAML string
     pub fn load_from_str(content: &str) -> Result<Self> {
-        let yaml: serde_yaml::Value = serde_yaml::from_str(content)
-            .map_err(|e| crate::LintError::ConfigError(format!("Invalid YAML: {}", e)))?;
+        let yaml = Self::read_config_layers(content, &mut HashSet::new())?;
 
         let mut config = Self::new();
 
@@ -581,7 +628,6 @@ impl Config {
         if let Some(extends) = yaml.get("extends").and_then(|v| v.as_str()) {
             config = match extends {
                 "default" => Self::with_default_preset(),
-                "relaxed" => Self::with_relaxed_preset(),
                 _ => {
                     return Err(crate::LintError::ConfigError(format!(
                         "Unknown preset: {}",
@@ -602,7 +648,13 @@ impl Config {
                     // Simple string level: "error", "warning", "disable"
                     serde_yaml::Value::String(s) => {
                         let level = match s.as_str() {
-                            "enable" | "error" => RuleLevel::Error,
+                            "enable" => config
+                                .rules
+                                .get(rule_name)
+                                .map(RuleConfig::level)
+                                .filter(|level| *level != RuleLevel::Disable)
+                                .unwrap_or(RuleLevel::Error),
+                            "error" => RuleLevel::Error,
                             "warning" => RuleLevel::Warning,
                             "disable" => RuleLevel::Disable,
                             _ => {
@@ -712,6 +764,94 @@ impl Config {
         Ok(config)
     }
 
+    fn read_config_layers(content: &str, seen: &mut HashSet<PathBuf>) -> Result<serde_yaml::Value> {
+        use serde_yaml::Value;
+
+        let mut yaml: Value = serde_yaml::from_str(content)
+            .map_err(|error| crate::LintError::ConfigError(format!("Invalid YAML: {error}")))?;
+        let Some(layer) = yaml.as_mapping_mut() else {
+            return Ok(yaml);
+        };
+        let Some(Value::String(path)) = layer.get("extends") else {
+            return Ok(yaml);
+        };
+        if path == "default" {
+            return Ok(yaml);
+        }
+
+        let base = if path == "relaxed" {
+            Self::read_config_layers(RELAXED_PRESET, seen)?
+        } else {
+            let path = Path::new(path);
+            let canonical = path.canonicalize().map_err(|error| {
+                crate::LintError::ConfigError(format!("extends {}: {error}", path.display()))
+            })?;
+            if !seen.insert(canonical) {
+                return Err(crate::LintError::ConfigError(format!(
+                    "Circular config inheritance at {}",
+                    path.display()
+                )));
+            }
+            let parent = read_config_text(path).map_err(|error| {
+                crate::LintError::ConfigError(format!("extends {}: {error}", path.display()))
+            })?;
+            Self::read_config_layers(&parent, seen)?
+        };
+        let Value::Mapping(mut base) = base else {
+            return Err(crate::LintError::ConfigError(format!(
+                "Extended config {path} must be a mapping"
+            )));
+        };
+        layer.remove("extends");
+        if layer.contains_key("ignore") || layer.contains_key("ignore-from-file") {
+            base.remove("ignore");
+            base.remove("ignore-from-file");
+        }
+        for (key, mut value) in std::mem::take(layer) {
+            if key.as_str() == Some("rules")
+                && let Some(Value::Mapping(inherited)) = base.get_mut(&key)
+                && let Value::Mapping(overrides) = &mut value
+            {
+                for (rule, settings) in std::mem::take(overrides) {
+                    match (inherited.get_mut(&rule), settings) {
+                        (Some(Value::String(base)), Value::String(level))
+                            if base == "disable" && level == "enable" =>
+                        {
+                            *base = "error".into();
+                        }
+                        (Some(base), Value::String(level))
+                            if level == "enable"
+                                && (base.is_mapping()
+                                    || matches!(base.as_str(), Some("warning" | "error"))) => {}
+                        (Some(Value::Mapping(base)), Value::Mapping(settings)) => {
+                            if settings.contains_key("ignore")
+                                || settings.contains_key("ignore-from-file")
+                            {
+                                base.remove("ignore");
+                                base.remove("ignore-from-file");
+                            }
+                            base.extend(settings);
+                        }
+                        (Some(Value::String(level)), Value::Mapping(mut settings)) => {
+                            if matches!(level.as_str(), "error" | "warning") {
+                                settings
+                                    .entry(Value::String("level".into()))
+                                    .or_insert_with(|| Value::String(level.clone()));
+                            }
+                            inherited.insert(rule, Value::Mapping(settings));
+                        }
+                        (_, settings) => {
+                            inherited.insert(rule, settings);
+                        }
+                    }
+                }
+            } else {
+                base.insert(key, value);
+            }
+        }
+        Ok(Value::Mapping(base))
+    }
+
     fn pattern_list(key: &str, value: &serde_yaml::Value) -> Result<Vec<String>> {
         value
             .as_sequence()
@@ -742,15 +882,10 @@ impl Config {
                 };
                 let mut patterns = Vec::new();
                 for file in files {
-                    let content = std::fs::read_to_string(&file).map_err(|error| {
+                    let content = read_config_text(Path::new(&file)).map_err(|error| {
                         crate::LintError::ConfigError(format!("ignore-from-file {file:?}: {error}"))
                     })?;
-                    patterns.extend(
-                        content
-                            .trim_start_matches('\u{feff}')
-                            .lines()
-                            .map(str::to_owned),
-                    );
+                    patterns.extend(content.lines().map(str::to_owned));
                 }
                 Ok(Some(patterns))
             }
@@ -831,12 +966,21 @@ impl Config {
                 "trailing-spaces" => {
                     construct_rule!(crate::rules::trailing_spaces::TrailingSpacesRule)
                 }
-                "line-length" => construct_rule!(
-                    rule_config,
-                    RuleOptions::LineLength { max } =>
-                        crate::rules::line_length::LineLengthRule::with_max(*max),
-                    crate::rules::line_length::LineLengthRule::new()
-                ),
+                "line-length" => match rule_config.options() {
+                    Some(RuleOptions::LineLength { max }) => {
+                        Box::new(crate::rules::line_length::LineLengthRule::with_max(*max))
+                    }
+                    Some(RuleOptions::LineLengthWithExemptions {
+                        max,
+                        allow_non_breakable_words,
+                        allow_non_breakable_inline_mappings,
+                    }) => Box::new(crate::rules::line_length::ConfiguredLineLength::new(
+                        *max,
+                        *allow_non_breakable_words,
+                        *allow_non_breakable_inline_mappings,
+                    )),
+                    _ => Box::new(crate::rules::line_length::LineLengthRule::new()),
+                },
                 "document-start" => {
                     if let Some(RuleOptions::DocumentStart { present }) = rule_config.options() {
                         match present {
@@ -851,7 +995,7 @@ impl Config {
                             }
                         }
                     } else {
-                        Box::new(crate::rules::document_start::DocumentStartRule::new())
+                        Box::new(crate::rules::document_start::DocumentStartRule::required())
                     }
                 }
                 "colons" => construct_rule!(
@@ -870,20 +1014,26 @@ impl Config {
                     RuleOptions::KeyDuplicates(rule) => rule.clone(),
                     crate::rules::key_duplicates::KeyDuplicatesRule
                 ),
-                "indentation" => {
-                    if let Some(RuleOptions::Indentation { spaces }) = rule_config.options() {
-                        match spaces {
-                            IndentConfig::Fixed(n) => Box::new(
-                                crate::rules::indentation::IndentationRule::with_spaces(*n),
-                            ),
-                            IndentConfig::Consistent => {
-                                Box::new(crate::rules::indentation::IndentationRule::consistent())
-                            }
-                        }
-                    } else {
-                        Box::new(crate::rules::indentation::IndentationRule::new())
-                    }
-                }
+                "indentation" => match rule_config.options() {
+                    Some(RuleOptions::Indentation {
+                        spaces: IndentConfig::Fixed(n),
+                    }) => Box::new(IndentationRule::with_spaces(*n)),
+                    Some(RuleOptions::IndentationWithSequences {
+                        spaces,
+                        sequences,
+                        check_multi_line_strings,
+                    }) => Box::new(ConfiguredIndentation {
+                        rule: IndentationRule {
+                            spaces: match spaces {
+                                IndentConfig::Fixed(n) => IndentSpaces::Fixed(*n),
+                                IndentConfig::Consistent => IndentSpaces::Consistent,
+                            },
+                        },
+                        sequences: *sequences,
+                        check_multi_line_strings: *check_multi_line_strings,
+                    }),
+                    _ => Box::new(IndentationRule::new()),
+                },
                 "new-lines" => Box::new(crate::rules::new_lines::NewLinesRule { newline_type }),
                 "new-line-at-end-of-file" => {
                     Box::new(NewLineAtEndOfFileRule::with_ending(newline_type.ending()))
@@ -1036,6 +1186,57 @@ impl Config {
     }
 }
 
+fn read_config_text(path: &Path) -> std::io::Result<String> {
+    let bytes = std::fs::read(path)?;
+    let invalid =
+        || std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid Unicode encoding");
+    let (bytes, width, little_endian) = match bytes.as_slice() {
+        [0, 0, 0xfe, 0xff, rest @ ..] => (rest, 4, false),
+        [0xff, 0xfe, 0, 0, rest @ ..] => (rest, 4, true),
+        [0xfe, 0xff, rest @ ..] => (rest, 2, false),
+        [0xff, 0xfe, rest @ ..] => (rest, 2, true),
+        data @ [0, 0, 0, _, ..] => (data, 4, false),
+        data @ [_, 0, 0, 0, ..] => (data, 4, true),
+        data @ [0, _, ..] => (data, 2, false),
+        data @ [_, 0, ..] => (data, 2, true),
+        data => {
+            return std::str::from_utf8(data.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(data))
+                .map(str::to_owned)
+                .map_err(|_| invalid());
+        }
+    };
+
+    if width == 2 {
+        let (units, remainder) = bytes.as_chunks::<2>();
+        if !remainder.is_empty() {
+            return Err(invalid());
+        }
+        let decode = if little_endian {
+            u16::from_le_bytes
+        } else {
+            u16::from_be_bytes
+        };
+        char::decode_utf16(units.iter().copied().map(decode))
+            .map(|value| value.map_err(|_| invalid()))
+            .collect()
+    } else {
+        let (units, remainder) = bytes.as_chunks::<4>();
+        if !remainder.is_empty() {
+            return Err(invalid());
+        }
+        let decode = if little_endian {
+            u32::from_le_bytes
+        } else {
+            u32::from_be_bytes
+        };
+        units
+            .iter()
+            .copied()
+            .map(|unit| char::from_u32(decode(unit)).ok_or_else(invalid))
+            .collect()
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self::with_default_preset()
@@ -1060,7 +1261,7 @@ mod tests {
         let config = Config::with_relaxed_preset();
         assert_eq!(
             config.get_rule_level("trailing-spaces"),
-            Some(RuleLevel::Warning)
+            Some(RuleLevel::Error)
         );
     }
 

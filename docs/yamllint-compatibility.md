@@ -22,41 +22,38 @@ run in the upstream suite without a Rust CLI comparison.
 | `anchors` | 8 | 8 | 8 | 8 |
 | `braces` | 74 | 72 | 72 | 72 |
 | `brackets` | 71 | 69 | 69 | 69 |
-| `colons` | 39 | 37 | 35 | 35 |
+| `colons` | 39 | 39 | 38 | 38 |
 | `commas` | 36 | 36 | 36 | 36 |
-| `comments` | 24 | 14 | 13 | 12 |
-| `comments-indentation` | 24 | 24 | 24 | 12 |
-| `document-end` | 13 | 13 | 12 | 12 |
-| `document-start` | 21 | 13 | 12 | 10 |
-| `empty-lines` | 32 | 22 | 22 | 18 |
-| `empty-values` | 62 | 54 | 54 | 54 |
+| `comments` | 24 | 24 | 23 | 23 |
+| `comments-indentation` | 24 | 24 | 24 | 24 |
+| `document-end` | 13 | 13 | 13 | 13 |
+| `document-start` | 21 | 20 | 20 | 20 |
+| `empty-lines` | 32 | 32 | 32 | 32 |
+| `empty-values` | 62 | 62 | 62 | 62 |
 | `float-values` | 5 | 5 | 5 | 5 |
 | `hyphens` | 20 | 20 | 20 | 20 |
-| `indentation` | 270 | 114 | 113 | 113 |
-| `key-duplicates` | 33 | 32 | 32 | 28 |
-| `key-ordering` | 21 | 17 | 17 | 17 |
-| `line-length` | 50 | 41 | 39 | 37 |
+| `indentation` | 270 | 262 | 256 | 256 |
+| `key-duplicates` | 33 | 33 | 33 | 33 |
+| `key-ordering` | 21 | 21 | 21 | 21 |
+| `line-length` | 50 | 50 | 50 | 50 |
 | `new-line-at-end-of-file` | 9 | 9 | 9 | 9 |
-| `new-lines` | 30 | 23 | 12 | 12 |
+| `new-lines` | 30 | 30 | 30 | 30 |
 | `octal-values` | 33 | 33 | 33 | 33 |
-| `quoted-strings` | 77 | 75 | 75 | 75 |
-| `syntax` | 10 | 9 | 9 | 6 |
-| `trailing-spaces` | 12 | 10 | 6 | 6 |
-| `truthy` | 18 | 18 | 18 | 15 |
-| **Total** | 992 | 768 | 745 | 714 |
+| `quoted-strings` | 77 | 77 | 77 | 77 |
+| `syntax` | 10 | 9 | 9 | 9 |
+| `trailing-spaces` | 12 | 10 | 10 | 10 |
+| `truthy` | 18 | 18 | 18 | 18 |
+| **Total** | 992 | 976 | 968 | 968 |
 
 Location comparisons include diagnostic rule IDs. The target column considers
 only the rule named by the fixture group. The other columns compare all
 diagnostics emitted for that fixture. The run used Rust 1.100.0 on macOS
 and had zero CLI config or file errors for the compared fixtures.
 
-- `indentation` has the most location differences. Upstream fixtures cover
-  sequence indentation, block scalars, and nested flows.
-- `yaml-rust2` reports `invalid indentation` for some multiline empty flow
-  collections whose closing delimiter is at column one. Yamllint accepts
-  those fixtures. Parser wording can also differ even when locations match.
-- The `new-lines` rule checks every line ending. The upstream fixtures expect
-  yamllint to check the first ending.
-- The CLI currently reads `ignore-from-file` as UTF-8. Upstream also supports
-  UTF-16 and UTF-32. File-based `extends` and the full upstream preset and
-  rule option sets remain open.
+- `indentation` has the most location differences. The remaining fixtures
+  include sequence indentation, block scalars, and nested flow collections.
+- The YAML scanner rejects some multiline empty flow collections whose closing
+  delimiter is at column one. It also differs on aliases adjacent to a colon
+  and on tabs outside quoted scalars.
+- The audit forwards the collation locale selected by the upstream key-ordering
+  fixtures to the Rust CLI.

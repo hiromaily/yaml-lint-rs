@@ -2,6 +2,7 @@
 
 use crate::problem::{LintLevel, LintProblem};
 use crate::rules::{LintContext, Rule, RuleLevel};
+use yaml_rust2::scanner::{Scanner, Token, TokenType::*};
 
 /// Configuration for document start requirement
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,38 +63,39 @@ impl Rule for DocumentStartRule {
 
         let mut problems = Vec::new();
 
-        // Check if the document starts with `---`
-        let has_document_start = context
-            .lines
-            .first()
-            .map(|line| {
-                let trimmed = line.trim();
-                trimmed == "---" || trimmed.starts_with("--- ")
-            })
-            .unwrap_or(false);
+        let mut at_boundary = true;
+        for Token(mark, token) in Scanner::new(context.content.chars()) {
+            match token {
+                StreamStart(_) | StreamEnd | BlockEnd => continue,
+                DocumentEnd | VersionDirective(..) | TagDirective(..) => {
+                    at_boundary = true;
+                    continue;
+                }
+                _ => {}
+            }
 
-        match self.presence {
-            DocumentStartPresence::Required if !has_document_start => {
+            let message = match (self.presence, &token) {
+                (DocumentStartPresence::Forbidden, DocumentStart) => {
+                    Some("found forbidden document start \"---\"")
+                }
+                (DocumentStartPresence::Required, token)
+                    if at_boundary && !matches!(token, DocumentStart) =>
+                {
+                    Some("missing document start \"---\"")
+                }
+                _ => None,
+            };
+            if let Some(message) = message {
                 problems.push(LintProblem::new(
+                    mark.line(),
                     1,
-                    1,
-                    "missing document start \"---\"",
+                    message,
                     self.name(),
                     LintLevel::Error,
                 ));
             }
-            DocumentStartPresence::Forbidden if has_document_start => {
-                problems.push(LintProblem::new(
-                    1,
-                    1,
-                    "found forbidden document start \"---\"",
-                    self.name(),
-                    LintLevel::Error,
-                ));
-            }
-            _ => {}
+            at_boundary = false;
         }
-
         problems
     }
 
@@ -188,6 +190,21 @@ mod tests {
         let rule = DocumentStartRule::required();
         let problems = rule.check(&context);
 
-        assert_eq!(problems.len(), 1);
+        assert!(problems.is_empty());
+    }
+
+    #[test]
+    fn checks_each_document_and_skips_comments_and_directives() {
+        let context = LintContext::new("# first\n%YAML 1.2\n---\na: 1\n---\nb: 2\n".into());
+        assert!(DocumentStartRule::required().check(&context).is_empty());
+        let lines: Vec<_> = DocumentStartRule::forbidden()
+            .check(&context)
+            .iter()
+            .map(|problem| problem.line)
+            .collect();
+        assert_eq!(lines, [3, 5]);
+        let problems = DocumentStartRule::required()
+            .check(&LintContext::new("# comment\nkey: value\n".into()));
+        assert_eq!((problems[0].line, problems[0].column), (2, 1));
     }
 }
