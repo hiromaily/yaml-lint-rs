@@ -29,18 +29,23 @@ impl Linter {
     /// Lint a file at the given path
     pub fn lint_file(&self, path: &Path) -> Result<Vec<LintProblem>> {
         let content = std::fs::read_to_string(path)?;
-        self.lint_string(&content)
+        self.lint_string_with_path(&content, Some(path))
     }
 
     /// Lint a YAML string
     pub fn lint_string(&self, content: &str) -> Result<Vec<LintProblem>> {
-        // First, try to parse the YAML to catch syntax errors
-        // For now, we'll skip YAML parsing errors and just run line-based rules
-        // In future, we'll add proper YAML parsing with yaml-rust2
+        self.lint_string_with_path(content, None)
+    }
 
+    /// Lint YAML with an optional filename for rule-level ignore patterns.
+    pub fn lint_string_with_path(
+        &self,
+        content: &str,
+        path: Option<&Path>,
+    ) -> Result<Vec<LintProblem>> {
         let context = LintContext::new(content.to_string());
-        let problems = self.registry.check_all(&context);
-
+        let mut problems = self.registry.check_for_path(&context, path);
+        crate::syntax::check(content, &mut problems);
         Ok(problems)
     }
 

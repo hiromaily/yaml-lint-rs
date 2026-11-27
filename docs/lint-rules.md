@@ -337,10 +337,10 @@ Restricts boolean representations to avoid YAML 1.1 vs 1.2 ambiguities.
 rules:
   truthy:
     allowed-values: ['true', 'false']  # Default: only true/false
-    check-keys: false                   # Also check mapping keys (default: false)
+    check-keys: true                    # Also check mapping keys (default: true)
 ```
 
-**Why it matters**: YAML 1.1 treats `yes`, `no`, `on`, `off`, `y`, `n` as booleans, while YAML 1.2 only treats `true`/`false` as booleans. This causes subtle bugs when switching parsers and is a common source of errors in Kubernetes/Helm configurations.
+**Why it matters**: YAML 1.1 boolean spellings include `yes`, `no`, `on`, and `off`. With a `%YAML 1.2` directive, the rule checks only variants of `true` and `false`. The allowlist is case-sensitive. An empty allowlist flags every checked spelling.
 
 **Examples**:
 
@@ -348,7 +348,7 @@ rules:
 # Bad - YAML 1.1 ambiguous values
 debug: yes
 enabled: on
-feature_flag: y
+feature_flag: True
 
 # Good - explicit boolean values
 debug: true
@@ -379,7 +379,7 @@ Controls spacing inside flow mappings (braces `{}`).
 ```yaml
 rules:
   braces:
-    forbid: false              # Forbid flow mappings entirely (default: false)
+    forbid: false              # true forbids all flow mappings, non-empty permits {}
     min-spaces-inside: 0       # Minimum spaces inside braces (default: 0)
     max-spaces-inside: 0       # Maximum spaces inside braces (default: 0)
     min-spaces-inside-empty: -1  # For empty braces, -1 uses min-spaces-inside
@@ -420,7 +420,7 @@ Controls spacing inside flow sequences (brackets `[]`).
 ```yaml
 rules:
   brackets:
-    forbid: false              # Forbid flow sequences entirely (default: false)
+    forbid: false              # true forbids all flow sequences, non-empty permits []
     min-spaces-inside: 0       # Minimum spaces inside brackets (default: 0)
     max-spaces-inside: 0       # Maximum spaces inside brackets (default: 0)
     min-spaces-inside-empty: -1  # For empty brackets, -1 uses min-spaces-inside

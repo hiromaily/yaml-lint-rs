@@ -129,10 +129,34 @@ ignore: |
   *.generated.yaml
 ```
 
-The CLI applies `ignore` to explicitly named YAML files and to files found
-when walking directories. A list of strings works as well as a multiline
-string. A leading slash anchors a pattern to the working directory. Use
-`--list-files` to see the files selected by the configuration.
+The CLI applies `ignore` to explicitly named files and to files found when
+walking directories. A list of strings works as well as a multiline string.
+A leading slash anchors a pattern to the working directory. Prefix a pattern
+with `!` to include matching files again.
+
+Use `yaml-files` to select which basenames are discovered when walking a
+directory. The default patterns are `*.yaml`, `*.yml`, and `.yamllint`.
+Explicit paths work with any filename. Use `--list-files` to see the files
+selected by the configuration.
+
+```yaml
+extends: default
+yaml-files: ['*.yaml', '*.yml', '*.yaml.in', '.yamllint']
+rules:
+  trailing-spaces:
+    ignore:
+      - /generated/
+      - '!keep.yaml'
+```
+
+Both the top-level configuration and individual rules also accept
+`ignore-from-file` as a filename or a list of filenames. Paths are relative to
+the working directory. Each UTF-8 file supplies one pattern per line. Use
+either `ignore` or `ignore-from-file` at a given level.
+
+Rule-level ignores apply to CLI linting and fixing, as well as to the library
+when using `lint_file`, `lint_string_with_path`, or `Fixer::fix` with a file
+path. YAML syntax diagnostics have error severity and use the `syntax` label.
 
 ### Presets
 
@@ -484,11 +508,7 @@ registry.register(Box::new(MyRule));
 
 ## Troubleshooting
 
-### No YAML Files Found
-
-Make sure your files have `.yaml` or `.yml` extensions.
-
-### Config Not Found
+### Missing Files in Directory Scans
 
 Use `--list-files` to debug file discovery:
 

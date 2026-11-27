@@ -1,8 +1,9 @@
 //! Configuration system for the linter
 
 use crate::Result;
+use crate::path_patterns::PathPatterns;
 use crate::rules::{
-    RuleLevel, anchors::AnchorsRule, commas::CommasRule,
+    FlowPolicy, RuleLevel, anchors::AnchorsRule, commas::CommasRule,
     comments_indentation::CommentsIndentationRule, document_end::DocumentEndRule,
     empty_values::EmptyValuesRule, float_values::FloatValuesRule,
     key_duplicates::KeyDuplicatesOptions, key_ordering::KeyOrderingRule,
@@ -89,14 +90,14 @@ pub enum RuleOptions {
         present: DocumentStartConfig,
     },
     Braces {
-        forbid: bool,
+        forbid: FlowPolicy,
         min_spaces_inside: usize,
         max_spaces_inside: usize,
         min_spaces_inside_empty: Option<usize>,
         max_spaces_inside_empty: Option<usize>,
     },
     Brackets {
-        forbid: bool,
+        forbid: FlowPolicy,
         min_spaces_inside: usize,
         max_spaces_inside: usize,
         min_spaces_inside_empty: Option<usize>,
@@ -131,6 +132,9 @@ pub struct Config {
     pub rules: IndexMap<String, RuleConfig>,
     /// File patterns to ignore
     pub ignore: Vec<String>,
+    /// Filename patterns used when discovering YAML files in directories.
+    pub yaml_files: Vec<String>,
+    rule_ignores: IndexMap<String, PathPatterns>,
 }
 
 impl Config {
@@ -139,6 +143,8 @@ impl Config {
         Self {
             rules: IndexMap::new(),
             ignore: Vec::new(),
+            yaml_files: ["*.yaml", "*.yml", ".yamllint"].map(str::to_owned).into(),
+            rule_ignores: IndexMap::new(),
         }
     }
 
@@ -437,26 +443,26 @@ impl Config {
 
     /// Parse truthy options
     fn parse_truthy_options(map: &serde_yaml::Mapping) -> Result<RuleOptions> {
-        let allowed_values = map
-            .get(serde_yaml::Value::String("allowed-values".to_string()))
-            .and_then(|v| v.as_sequence())
-            .map(|seq| {
-                seq.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_else(|| vec!["true".to_string(), "false".to_string()]);
+        let allowed_values = match map.get("allowed-values") {
+            Some(value) => Self::pattern_list("truthy allowed-values", value)?,
+            None => vec!["true".into(), "false".into()],
+        };
 
-        if allowed_values.is_empty() {
-            return Err(crate::LintError::ConfigError(
-                "truthy allowed-values cannot be empty".to_string(),
-            ));
+        if let Some(value) = allowed_values
+            .iter()
+            .find(|value| !crate::rules::truthy::YAML_11_VALUES.contains(&value.as_str()))
+        {
+            return Err(crate::LintError::ConfigError(format!(
+                "truthy allowed-values contains an invalid value: {value:?}"
+            )));
         }
 
-        let check_keys = map
-            .get(serde_yaml::Value::String("check-keys".to_string()))
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let check_keys = match map.get("check-keys") {
+            Some(value) => value.as_bool().ok_or_else(|| {
+                crate::LintError::ConfigError("truthy check-keys must be a boolean".into())
+            })?,
+            None => true,
+        };
 
         Ok(RuleOptions::Truthy {
             allowed_values,
@@ -490,24 +496,28 @@ impl Config {
         constructor: F,
     ) -> Result<RuleOptions>
     where
-        F: FnOnce(bool, usize, usize, Option<usize>, Option<usize>) -> RuleOptions,
+        F: FnOnce(FlowPolicy, usize, usize, Option<usize>, Option<usize>) -> RuleOptions,
     {
-        let forbid = map
-            .get(serde_yaml::Value::String("forbid".to_string()))
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let forbid = match map.get("forbid") {
+            None | Some(serde_yaml::Value::Bool(false)) => FlowPolicy::Allow,
+            Some(serde_yaml::Value::Bool(true)) => FlowPolicy::Forbid,
+            Some(value) if value.as_str() == Some("non-empty") => FlowPolicy::EmptyOnly,
+            _ => {
+                return Err(crate::LintError::ConfigError(
+                    "forbid must be a boolean or 'non-empty'".into(),
+                ));
+            }
+        };
 
         let min_spaces_inside = map
-            .get(serde_yaml::Value::String("min-spaces-inside".to_string()))
+            .get("min-spaces-inside")
             .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
-            .unwrap_or(0);
-
-        let max_spaces_inside = map
-            .get(serde_yaml::Value::String("max-spaces-inside".to_string()))
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
-            .unwrap_or(0);
+            .map_or(0, |n| n as usize);
+        let max_spaces_inside = match map.get("max-spaces-inside").and_then(|v| v.as_i64()) {
+            Some(-1) => usize::MAX,
+            Some(n) if n >= 0 => n as usize,
+            _ => 0,
+        };
 
         let min_spaces_inside_empty = map
             .get(serde_yaml::Value::String(
@@ -606,26 +616,55 @@ impl Config {
                     }
                     // Mapping with options
                     serde_yaml::Value::Mapping(map) => {
-                        // Extract explicit level if specified, otherwise default to Error
-                        let level = map
-                            .get(serde_yaml::Value::String("level".to_string()))
-                            .and_then(|v| v.as_str())
-                            .map(|s| match s {
-                                "error" => Ok(RuleLevel::Error),
-                                "warning" => Ok(RuleLevel::Warning),
-                                "disable" => Ok(RuleLevel::Disable),
-                                _ => Err(crate::LintError::ConfigError(format!(
-                                    "Invalid rule level: {}",
-                                    s
-                                ))),
-                            })
-                            .transpose()?
-                            .unwrap_or(RuleLevel::Error);
+                        let inherited = config.rules.get(rule_name);
+                        let level = match map.get("level") {
+                            Some(value) => match value.as_str() {
+                                Some("error") => RuleLevel::Error,
+                                Some("warning") => RuleLevel::Warning,
+                                Some("disable") => RuleLevel::Disable,
+                                _ => {
+                                    return Err(crate::LintError::ConfigError(format!(
+                                        "Invalid level for rule {rule_name}"
+                                    )));
+                                }
+                            },
+                            None => inherited
+                                .map(RuleConfig::level)
+                                .filter(|level| *level != RuleLevel::Disable)
+                                .unwrap_or(RuleLevel::Error),
+                        };
 
-                        // Parse rule-specific options
-                        let options = Self::parse_rule_options(rule_name, map)?;
-
-                        RuleConfig::Detailed { level, options }
+                        if let Some(patterns) = Self::ignore_patterns(value)? {
+                            config
+                                .rule_ignores
+                                .insert(rule_name.to_owned(), PathPatterns::new(&patterns)?);
+                        }
+                        let mut options = map.clone();
+                        options.remove("ignore");
+                        options.remove("ignore-from-file");
+                        options.remove("level");
+                        if options.is_empty() {
+                            match inherited.and_then(RuleConfig::options) {
+                                Some(options) => RuleConfig::Detailed {
+                                    level,
+                                    options: options.clone(),
+                                },
+                                None if matches!(
+                                    rule_name,
+                                    "trailing-spaces" | "new-line-at-end-of-file"
+                                ) =>
+                                {
+                                    RuleConfig::Level(level)
+                                }
+                                None => RuleConfig::Detailed {
+                                    level,
+                                    options: Self::parse_rule_options(rule_name, &options)?,
+                                },
+                            }
+                        } else {
+                            let options = Self::parse_rule_options(rule_name, &options)?;
+                            RuleConfig::Detailed { level, options }
+                        }
                     }
                     _ => {
                         return Err(crate::LintError::ConfigError(
@@ -661,22 +700,62 @@ impl Config {
             }
         }
 
-        if let Some(ignore) = yaml.get("ignore") {
-            config.ignore = match ignore {
-                serde_yaml::Value::String(patterns) => {
-                    patterns.lines().map(str::to_owned).collect()
-                }
-                serde_yaml::Value::Sequence(_) => serde_yaml::from_value(ignore.clone())
-                    .map_err(|error| crate::LintError::ConfigError(format!("ignore: {error}")))?,
-                _ => {
-                    return Err(crate::LintError::ConfigError(
-                        "ignore must be a string or a sequence of strings".into(),
-                    ));
-                }
-            };
+        if let Some(patterns) = Self::ignore_patterns(&yaml)? {
+            PathPatterns::new(&patterns)?;
+            config.ignore = patterns;
+        }
+        if let Some(patterns) = yaml.get("yaml-files") {
+            config.yaml_files = Self::pattern_list("yaml-files", patterns)?;
+            PathPatterns::new(&config.yaml_files)?;
         }
 
         Ok(config)
+    }
+
+    fn pattern_list(key: &str, value: &serde_yaml::Value) -> Result<Vec<String>> {
+        value
+            .as_sequence()
+            .and_then(|items| {
+                items
+                    .iter()
+                    .map(|item| item.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .ok_or_else(|| {
+                crate::LintError::ConfigError(format!("{key} must be a sequence of strings"))
+            })
+    }
+
+    fn ignore_patterns(value: &serde_yaml::Value) -> Result<Option<Vec<String>>> {
+        match (value.get("ignore"), value.get("ignore-from-file")) {
+            (Some(_), Some(_)) => Err(crate::LintError::ConfigError(
+                "ignore and ignore-from-file cannot be used together".into(),
+            )),
+            (Some(serde_yaml::Value::String(patterns)), None) => {
+                Ok(Some(patterns.lines().map(str::to_owned).collect()))
+            }
+            (Some(patterns), None) => Self::pattern_list("ignore", patterns).map(Some),
+            (None, Some(files)) => {
+                let files = match files {
+                    serde_yaml::Value::String(file) => vec![file.clone()],
+                    _ => Self::pattern_list("ignore-from-file", files)?,
+                };
+                let mut patterns = Vec::new();
+                for file in files {
+                    let content = std::fs::read_to_string(&file).map_err(|error| {
+                        crate::LintError::ConfigError(format!("ignore-from-file {file:?}: {error}"))
+                    })?;
+                    patterns.extend(
+                        content
+                            .trim_start_matches('\u{feff}')
+                            .lines()
+                            .map(str::to_owned),
+                    );
+                }
+                Ok(Some(patterns))
+            }
+            (None, None) => Ok(None),
+        }
     }
 
     /// Find a config file starting from the given directory
@@ -860,7 +939,7 @@ impl Config {
                         max_spaces_inside,
                         min_spaces_inside_empty,
                         max_spaces_inside_empty,
-                    } => crate::rules::braces::BracesRule::with_config(
+                    } => crate::rules::braces::BracesRule::with_policy(
                         *forbid,
                         *min_spaces_inside,
                         *max_spaces_inside,
@@ -877,7 +956,7 @@ impl Config {
                         max_spaces_inside,
                         min_spaces_inside_empty,
                         max_spaces_inside_empty,
-                    } => crate::rules::brackets::BracketsRule::with_config(
+                    } => crate::rules::brackets::BracketsRule::with_policy(
                         *forbid,
                         *min_spaces_inside,
                         *max_spaces_inside,
@@ -948,6 +1027,9 @@ impl Config {
 
             registry.register(rule);
             registry.set_level(rule_name, level);
+            if let Some(patterns) = self.rule_ignores.get(rule_name) {
+                registry.set_ignore(rule_name, patterns.clone());
+            }
         }
 
         registry

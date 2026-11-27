@@ -57,18 +57,19 @@ impl<'a> Fixer<'a> {
     /// Fix all fixable problems in the given content
     /// Returns the fix result including the fixed content
     pub fn fix(&self, path: &str, content: &str) -> FixResult {
-        let mut result = FixResult::new(path.to_string());
+        self.fix_file(std::path::Path::new(path), content)
+    }
+
+    /// Fix YAML using its file path for rule-level ignore patterns.
+    pub fn fix_file(&self, path: &std::path::Path, content: &str) -> FixResult {
+        let mut result = FixResult::new(path.display().to_string());
         let mut current_content = content.to_string();
 
         // Iteratively fix problems until no more fixes can be applied
         // This handles cases where fixing one problem might reveal or affect others
         loop {
             let context = LintContext::new(current_content.clone());
-            let problems = self.registry.check_all(&context);
-
-            if problems.is_empty() {
-                break;
-            }
+            let mut problems = self.registry.check_for_path(&context, Some(path));
 
             // Try to fix problems in order (sorted by line number)
             // This applies fixes top-to-bottom and avoids HashMap overhead
@@ -90,6 +91,7 @@ impl<'a> Fixer<'a> {
             }
             if !made_progress {
                 // Some rules cannot safely fix every diagnostic in context.
+                crate::syntax::check(&current_content, &mut problems);
                 result.unfixable_problems = problems;
                 break;
             }

@@ -1,7 +1,9 @@
 //! Colons rule - validates spacing around colons in mappings
 
+use super::tokens;
 use crate::problem::{LintLevel, LintProblem};
 use crate::rules::{LintContext, Rule, RuleLevel};
+use yaml_rust2::scanner::{Scanner, Token, TokenType};
 
 /// Rule that checks spacing around colons in key-value mappings
 #[derive(Debug)]
@@ -42,105 +44,57 @@ impl Rule for ColonsRule {
     }
 
     fn check(&self, context: &LintContext) -> Vec<LintProblem> {
-        let mut problems = Vec::new();
-
-        for (line_idx, line) in context.lines.iter().enumerate() {
-            // Skip comment lines and empty lines
-            let trimmed = line.trim();
-            if trimmed.is_empty() || trimmed.starts_with('#') {
-                continue;
-            }
-
-            // Skip document markers and directives
-            if trimmed.starts_with("---") || trimmed.starts_with("...") || trimmed.starts_with('%')
-            {
-                continue;
-            }
-
-            // Find colons that are part of key-value pairs (not in strings)
-            // Simple approach: look for colons followed by space or end of line
-            let mut in_single_quote = false;
-            let mut in_double_quote = false;
-            let mut escaped = false;
-
-            for (col_idx, ch) in line.char_indices() {
-                if escaped {
-                    escaped = false;
-                    continue;
-                }
-
-                match ch {
-                    '\\' if in_double_quote => escaped = true,
-                    '\'' if !in_double_quote => in_single_quote = !in_single_quote,
-                    '"' if !in_single_quote => in_double_quote = !in_double_quote,
-                    ':' if !in_single_quote && !in_double_quote => {
-                        // Found a colon outside of quotes
-                        // Check if it's part of a key-value pair (followed by space, newline, or comment)
-                        let rest = &line[col_idx + 1..];
-                        let next_char = rest.chars().next();
-
-                        // This looks like a mapping colon if followed by space, nothing, or comment
-                        if matches!(next_char, None | Some(' ') | Some('#') | Some('\n')) {
-                            // Check spaces before colon
-                            let spaces_before = line[..col_idx]
-                                .chars()
-                                .rev()
-                                .take_while(|&c| c == ' ')
-                                .count();
-
-                            if spaces_before > self.max_spaces_before {
-                                problems.push(LintProblem::new(
-                                    line_idx + 1,
-                                    col_idx + 1,
-                                    format!(
-                                        "too many spaces before colon ({} > {})",
-                                        spaces_before, self.max_spaces_before
-                                    ),
-                                    self.name(),
-                                    LintLevel::Error,
-                                ));
-                            }
-
-                            // Check spaces after colon
-                            if let Some(' ') = next_char {
-                                let spaces_after = rest.chars().take_while(|&c| c == ' ').count();
-
-                                if spaces_after > self.max_spaces_after {
-                                    problems.push(LintProblem::new(
-                                        line_idx + 1,
-                                        col_idx + 2,
-                                        format!(
-                                            "too many spaces after colon ({} > {})",
-                                            spaces_after, self.max_spaces_after
-                                        ),
-                                        self.name(),
-                                        LintLevel::Error,
-                                    ));
-                                }
-                            } else if next_char.is_none() {
-                                // Colon at end of line is okay (value on next line)
-                            } else if let Some('#') = next_char {
-                                // Colon followed by comment - should have space
-                                if self.max_spaces_after > 0 {
-                                    problems.push(LintProblem::new(
-                                        line_idx + 1,
-                                        col_idx + 2,
-                                        "missing space after colon",
-                                        self.name(),
-                                        LintLevel::Error,
-                                    ));
-                                }
-                            }
-
-                            // Only check first colon in line for simplicity
-                            break;
-                        }
-                    }
-                    _ => {}
-                }
-            }
+        use TokenType::*;
+        if !context.content.contains([':', '?']) {
+            return Vec::new();
         }
-
+        let mut scanner = Scanner::new(context.content.chars()).peekable();
+        let mut previous = None;
+        let mut problems = Vec::new();
+        while let Some(Token(mark, token)) = scanner.next() {
+            let line = context.lines.get(mark.line() - 1);
+            let mut after = None;
+            match token {
+                Value => {
+                    let spaces = line.map_or(0, |line| tokens::spaces_before(line, mark.col()));
+                    if !matches!(previous, Some(Alias(_))) || spaces != 1 {
+                        if spaces < mark.col() && spaces > self.max_spaces_before {
+                            problems.push(LintProblem::new(
+                                mark.line(),
+                                mark.col(),
+                                "too many spaces before colon",
+                                self.name(),
+                                LintLevel::Error,
+                            ));
+                        }
+                        after = Some("too many spaces after colon");
+                    }
+                }
+                Key if line.and_then(|line| line.chars().nth(mark.col())) == Some('?') => {
+                    after = Some("too many spaces after question mark");
+                }
+                _ => {}
+            }
+            if let (Some(message), Some(line), Some(Token(next, _))) = (after, line, scanner.peek())
+                && next.line() == mark.line()
+            {
+                let mut tail = line.chars().skip(mark.col() + 1).peekable();
+                let mut spaces = 0;
+                while tail.next_if(|ch| matches!(ch, ' ' | '\t')).is_some() {
+                    spaces += 1;
+                }
+                if spaces > self.max_spaces_after && tail.peek().is_some_and(|ch| *ch != '#') {
+                    problems.push(LintProblem::new(
+                        mark.line(),
+                        mark.col() + spaces + 1,
+                        message,
+                        self.name(),
+                        LintLevel::Error,
+                    ));
+                }
+            }
+            previous = Some(token);
+        }
         problems
     }
 

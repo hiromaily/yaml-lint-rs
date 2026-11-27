@@ -1,7 +1,117 @@
-//! Shared logic for flow collection rules (braces `{}` and brackets `[]`)
+//! Spacing for flow mappings and sequences.
 
-use crate::problem::{LintLevel, LintProblem};
-use crate::rules::LintContext;
+use super::{LintContext, tokens};
+use crate::LintProblem;
+use yaml_rust2::scanner::{Scanner, Token, TokenType};
+
+/// Whether flow collections are allowed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum FlowPolicy {
+    /// Allow all flow collections.
+    #[default]
+    Allow,
+    /// Forbid all flow collections.
+    Forbid,
+    /// Allow only empty flow collections.
+    EmptyOnly,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct FlowSpacing {
+    pub policy: FlowPolicy,
+    pub min_spaces_inside: usize,
+    pub max_spaces_inside: usize,
+    pub min_spaces_inside_empty: Option<usize>,
+    pub max_spaces_inside_empty: Option<usize>,
+}
+
+impl FlowSpacing {
+    pub(super) fn check(
+        &self,
+        context: &LintContext,
+        sequence: bool,
+        collection_name: &str,
+        forbidden_message: &str,
+        rule: &'static str,
+    ) -> Vec<LintProblem> {
+        use TokenType::*;
+        let (open, close, delimiter) = if sequence {
+            (FlowSequenceStart, FlowSequenceEnd, '[')
+        } else {
+            (FlowMappingStart, FlowMappingEnd, '{')
+        };
+        if !context.content.contains(delimiter) {
+            return Vec::new();
+        }
+
+        let mut scanner = Scanner::new(context.content.chars()).peekable();
+        let mut previous = None;
+        let mut problems = Vec::new();
+        while let Some(Token(mark, token)) = scanner.next() {
+            let mut min = self.min_spaces_inside;
+            let mut max = self.max_spaces_inside;
+            let mut empty = false;
+            let mut boundary = None;
+            if token == open {
+                empty = scanner.peek().is_some_and(|Token(_, next)| *next == close);
+                if self.policy == FlowPolicy::Forbid
+                    || (self.policy == FlowPolicy::EmptyOnly && !empty)
+                {
+                    problems.push(LintProblem::new(
+                        mark.line(),
+                        mark.col() + 2,
+                        forbidden_message,
+                        rule,
+                        crate::LintLevel::Error,
+                    ));
+                } else {
+                    if empty {
+                        min = self.min_spaces_inside_empty.unwrap_or(min);
+                        max = self.max_spaces_inside_empty.unwrap_or(max);
+                    }
+                    if let Some(Token(next, _)) = scanner.peek()
+                        && next.line() == mark.line()
+                        && let Some(spaces) = next.col().checked_sub(mark.col() + 1)
+                    {
+                        boundary = Some((next.col(), spaces));
+                    }
+                }
+            } else if token == close
+                && previous.as_ref().is_some_and(|token| *token != open)
+                && let Some(line) = context.lines.get(mark.line() - 1)
+            {
+                let spaces = tokens::spaces_before(line, mark.col());
+                if spaces < mark.col() {
+                    boundary = Some((mark.col(), spaces));
+                }
+            }
+
+            if let Some((column, spaces)) = boundary {
+                let violation = if spaces > max {
+                    Some((column, "too many"))
+                } else if spaces < min {
+                    Some((column + 1, "too few"))
+                } else {
+                    None
+                };
+                if let Some((column, violation)) = violation {
+                    problems.push(LintProblem::new(
+                        mark.line(),
+                        column.max(1),
+                        format!(
+                            "{violation} spaces inside {}{collection_name}",
+                            if empty { "empty " } else { "" }
+                        ),
+                        rule,
+                        crate::LintLevel::Error,
+                    ));
+                }
+            }
+            previous = Some(token);
+        }
+        problems
+    }
+}
 
 /// Configuration for a flow collection spacing rule
 #[derive(Debug)]
@@ -101,11 +211,7 @@ pub fn find_closing_char(
     None
 }
 
-/// Check lines for flow collection spacing issues.
-/// `open_char`/`close_char` define the delimiters (e.g. `{`/`}` or `[`/`]`).
-/// `collection_name` is used in spacing error messages (e.g. "braces" or "brackets").
-/// `forbidden_name` is used in the forbid message (e.g. "flow mapping (braces)").
-/// `rule_name` is the rule identifier (e.g. "braces" or "brackets").
+/// Check flow collection delimiters for spacing problems.
 pub fn check_flow_collection(
     context: &LintContext,
     config: &FlowCollectionConfig,
@@ -115,154 +221,27 @@ pub fn check_flow_collection(
     forbidden_name: &str,
     rule_name: &'static str,
 ) -> Vec<LintProblem> {
-    let mut problems = Vec::new();
-
-    for (line_idx, line) in context.lines.iter().enumerate() {
-        let line_num = line_idx + 1;
-        let chars: Vec<char> = line.chars().collect();
-        let mut quotes = QuoteState::default();
-        let mut i = 0;
-
-        while i < chars.len() {
-            let ch = chars[i];
-            let prev = if i > 0 { Some(chars[i - 1]) } else { None };
-
-            // Track quote state
-            if quotes.process_char(ch, prev) {
-                i += 1;
-                continue;
-            }
-
-            // Skip if inside quotes
-            if quotes.in_quotes() {
-                i += 1;
-                continue;
-            }
-
-            // Skip comments
-            if ch == '#' {
-                break;
-            }
-
-            if ch == open_char {
-                if config.forbid {
-                    problems.push(LintProblem::new(
-                        line_num,
-                        i + 1,
-                        format!("{forbidden_name} is forbidden"),
-                        rule_name,
-                        LintLevel::Error,
-                    ));
-                    i += 1;
-                    continue;
-                }
-
-                // Check if empty
-                let after_open = i + 1;
-                if let Some(close_pos) =
-                    find_closing_char(&chars, after_open, open_char, close_char)
-                {
-                    let content_between = &chars[after_open..close_pos];
-                    let is_empty = content_between.iter().all(|c| *c == ' ');
-
-                    if is_empty {
-                        let spaces = close_pos - after_open;
-                        let min = config.effective_min_empty();
-                        let max = config.effective_max_empty();
-
-                        if spaces < min {
-                            problems.push(LintProblem::new(
-                                line_num,
-                                after_open + 1,
-                                format!(
-                                    "too few spaces inside empty {collection_name} ({spaces} < {min})"
-                                ),
-                                rule_name,
-                                LintLevel::Error,
-                            ));
-                        } else if spaces > max {
-                            problems.push(LintProblem::new(
-                                line_num,
-                                after_open + 1,
-                                format!(
-                                    "too many spaces inside empty {collection_name} ({spaces} > {max})"
-                                ),
-                                rule_name,
-                                LintLevel::Error,
-                            ));
-                        }
-                        i = close_pos + 1;
-                        continue;
-                    }
-                }
-
-                // Non-empty: check spaces after opening
-                let spaces_after = chars[after_open..]
-                    .iter()
-                    .take_while(|c| **c == ' ')
-                    .count();
-
-                if spaces_after < config.min_spaces_inside {
-                    problems.push(LintProblem::new(
-                        line_num,
-                        after_open + 1,
-                        format!(
-                            "too few spaces inside {collection_name} ({} < {})",
-                            spaces_after, config.min_spaces_inside
-                        ),
-                        rule_name,
-                        LintLevel::Error,
-                    ));
-                } else if spaces_after > config.max_spaces_inside {
-                    problems.push(LintProblem::new(
-                        line_num,
-                        after_open + 1,
-                        format!(
-                            "too many spaces inside {collection_name} ({} > {})",
-                            spaces_after, config.max_spaces_inside
-                        ),
-                        rule_name,
-                        LintLevel::Error,
-                    ));
-                }
-            } else if ch == close_char && !config.forbid {
-                // Check spaces before closing
-                if i > 0 {
-                    let spaces_before = chars[..i].iter().rev().take_while(|c| **c == ' ').count();
-
-                    let prev_non_space = chars[..i].iter().rev().find(|c| **c != ' ');
-
-                    if prev_non_space != Some(&open_char) {
-                        if spaces_before < config.min_spaces_inside {
-                            problems.push(LintProblem::new(
-                                line_num,
-                                i + 1,
-                                format!(
-                                    "too few spaces inside {collection_name} ({} < {})",
-                                    spaces_before, config.min_spaces_inside
-                                ),
-                                rule_name,
-                                LintLevel::Error,
-                            ));
-                        } else if spaces_before > config.max_spaces_inside {
-                            problems.push(LintProblem::new(
-                                line_num,
-                                i + 1,
-                                format!(
-                                    "too many spaces inside {collection_name} ({} > {})",
-                                    spaces_before, config.max_spaces_inside
-                                ),
-                                rule_name,
-                                LintLevel::Error,
-                            ));
-                        }
-                    }
-                }
-            }
-
-            i += 1;
-        }
+    let sequence = match (open_char, close_char) {
+        ('[', ']') => true,
+        ('{', '}') => false,
+        _ => return Vec::new(),
+    };
+    FlowSpacing {
+        policy: if config.forbid {
+            FlowPolicy::Forbid
+        } else {
+            FlowPolicy::Allow
+        },
+        min_spaces_inside: config.min_spaces_inside,
+        max_spaces_inside: config.max_spaces_inside,
+        min_spaces_inside_empty: config.min_spaces_inside_empty,
+        max_spaces_inside_empty: config.max_spaces_inside_empty,
     }
-
-    problems
+    .check(
+        context,
+        sequence,
+        collection_name,
+        &format!("{forbidden_name} is forbidden"),
+        rule_name,
+    )
 }

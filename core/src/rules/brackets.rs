@@ -1,7 +1,7 @@
 //! Brackets rule - controls spacing inside flow sequences `[]`
 
 use crate::problem::LintProblem;
-use crate::rules::flow_collection::{FlowCollectionConfig, check_flow_collection};
+use crate::rules::flow_collection::{FlowPolicy, FlowSpacing};
 use crate::rules::{LintContext, Rule, RuleLevel};
 
 /// Rule that controls spacing inside flow sequences (brackets `[]`)
@@ -10,20 +10,14 @@ use crate::rules::{LintContext, Rule, RuleLevel};
 /// and can optionally forbid flow sequences entirely.
 #[derive(Debug)]
 pub struct BracketsRule {
-    config: FlowCollectionConfig,
+    config: FlowSpacing,
 }
 
 impl BracketsRule {
     /// Create a new rule with default settings
     pub fn new() -> Self {
         Self {
-            config: FlowCollectionConfig {
-                forbid: false,
-                min_spaces_inside: 0,
-                max_spaces_inside: 0,
-                min_spaces_inside_empty: None,
-                max_spaces_inside_empty: None,
-            },
+            config: FlowSpacing::default(),
         }
     }
 
@@ -35,9 +29,29 @@ impl BracketsRule {
         min_spaces_inside_empty: Option<usize>,
         max_spaces_inside_empty: Option<usize>,
     ) -> Self {
+        Self::with_policy(
+            if forbid {
+                FlowPolicy::Forbid
+            } else {
+                FlowPolicy::Allow
+            },
+            min_spaces_inside,
+            max_spaces_inside,
+            min_spaces_inside_empty,
+            max_spaces_inside_empty,
+        )
+    }
+
+    pub(crate) fn with_policy(
+        policy: FlowPolicy,
+        min_spaces_inside: usize,
+        max_spaces_inside: usize,
+        min_spaces_inside_empty: Option<usize>,
+        max_spaces_inside_empty: Option<usize>,
+    ) -> Self {
         Self {
-            config: FlowCollectionConfig {
-                forbid,
+            config: FlowSpacing {
+                policy,
                 min_spaces_inside,
                 max_spaces_inside,
                 min_spaces_inside_empty,
@@ -59,13 +73,11 @@ impl Rule for BracketsRule {
     }
 
     fn check(&self, context: &LintContext) -> Vec<LintProblem> {
-        check_flow_collection(
+        self.config.check(
             context,
-            &self.config,
-            '[',
-            ']',
+            true,
             "brackets",
-            "flow sequence (brackets)",
+            "forbidden flow sequence",
             self.name(),
         )
     }
