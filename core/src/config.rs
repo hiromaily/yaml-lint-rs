@@ -4,7 +4,8 @@ use crate::Result;
 use crate::rules::{
     RuleLevel, anchors::AnchorsRule, commas::CommasRule,
     comments_indentation::CommentsIndentationRule, document_end::DocumentEndRule,
-    empty_values::EmptyValuesRule, float_values::FloatValuesRule, key_ordering::KeyOrderingRule,
+    empty_values::EmptyValuesRule, float_values::FloatValuesRule,
+    key_duplicates::KeyDuplicatesOptions, key_ordering::KeyOrderingRule,
     new_line_at_end_of_file::NewLineAtEndOfFileRule, new_lines::NewLineType,
     octal_values::OctalValuesRule, quoted_strings::QuotedStringsRule,
 };
@@ -50,6 +51,7 @@ pub enum RuleOptions {
     DocumentEnd(DocumentEndRule),
     EmptyValues(EmptyValuesRule),
     FloatValues(FloatValuesRule),
+    KeyDuplicates(KeyDuplicatesOptions),
     KeyOrdering(KeyOrderingRule),
     OctalValues(OctalValuesRule),
     QuotedStrings(QuotedStringsRule),
@@ -253,6 +255,7 @@ impl Config {
             "document-end" => Self::parse_options(rule_name, map).map(RuleOptions::DocumentEnd),
             "empty-values" => Self::parse_options(rule_name, map).map(RuleOptions::EmptyValues),
             "float-values" => Self::parse_options(rule_name, map).map(RuleOptions::FloatValues),
+            "key-duplicates" => Self::parse_options(rule_name, map).map(RuleOptions::KeyDuplicates),
             "key-ordering" => Self::parse_options(rule_name, map).map(RuleOptions::KeyOrdering),
             "octal-values" => Self::parse_options(rule_name, map).map(RuleOptions::OctalValues),
             "quoted-strings" => {
@@ -635,9 +638,42 @@ impl Config {
             }
         }
 
-        // Parse ignore patterns
-        if let Some(ignore) = yaml.get("ignore").and_then(|v| v.as_str()) {
-            config.ignore = ignore.lines().map(|s| s.to_string()).collect();
+        if let Some(locale) = yaml.get("locale") {
+            let locale = locale
+                .as_str()
+                .ok_or_else(|| crate::LintError::ConfigError("locale must be a string".into()))?;
+            let rule_config = config.rules.get("key-ordering");
+            let rule = match rule_config.and_then(RuleConfig::options) {
+                Some(RuleOptions::KeyOrdering(rule)) => rule.clone(),
+                _ => KeyOrderingRule::default(),
+            }
+            .with_locale(locale)?;
+
+            if let Some(rule_config) = rule_config {
+                let level = rule_config.level();
+                config.rules.insert(
+                    "key-ordering".into(),
+                    RuleConfig::Detailed {
+                        level,
+                        options: RuleOptions::KeyOrdering(rule),
+                    },
+                );
+            }
+        }
+
+        if let Some(ignore) = yaml.get("ignore") {
+            config.ignore = match ignore {
+                serde_yaml::Value::String(patterns) => {
+                    patterns.lines().map(str::to_owned).collect()
+                }
+                serde_yaml::Value::Sequence(_) => serde_yaml::from_value(ignore.clone())
+                    .map_err(|error| crate::LintError::ConfigError(format!("ignore: {error}")))?,
+                _ => {
+                    return Err(crate::LintError::ConfigError(
+                        "ignore must be a string or a sequence of strings".into(),
+                    ));
+                }
+            };
         }
 
         Ok(config)
@@ -750,9 +786,11 @@ impl Config {
                     ),
                     crate::rules::colons::ColonsRule::new()
                 ),
-                "key-duplicates" => {
-                    construct_rule!(crate::rules::key_duplicates::KeyDuplicatesRule)
-                }
+                "key-duplicates" => construct_rule!(
+                    rule_config,
+                    RuleOptions::KeyDuplicates(rule) => rule.clone(),
+                    crate::rules::key_duplicates::KeyDuplicatesRule
+                ),
                 "indentation" => {
                     if let Some(RuleOptions::Indentation { spaces }) = rule_config.options() {
                         match spaces {
