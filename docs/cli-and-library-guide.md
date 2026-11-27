@@ -168,7 +168,7 @@ Strict preset suitable for production:
 
 ```yaml
 extends: default
-# document-start is disabled and truthy is a warning
+# document-start and truthy are warnings
 ```
 
 #### relaxed
@@ -177,7 +177,7 @@ More permissive preset:
 
 ```yaml
 extends: relaxed
-# Most rules as warnings, key-duplicates as error
+# Comments, document-start, and truthy are disabled
 ```
 
 ### Line endings

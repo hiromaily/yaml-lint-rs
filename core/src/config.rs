@@ -17,6 +17,23 @@ use indexmap::IndexMap;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+const RELAXED_PRESET: &str = r#"
+extends: default
+rules:
+  braces: {level: warning, max-spaces-inside: 1}
+  brackets: {level: warning, max-spaces-inside: 1}
+  colons: warning
+  commas: warning
+  comments: disable
+  comments-indentation: disable
+  document-start: disable
+  empty-lines: warning
+  hyphens: warning
+  indentation: {level: warning, indent-sequences: consistent}
+  line-length: {level: warning, allow-non-breakable-inline-mappings: true}
+  truthy: disable
+"#;
+
 /// Configuration for a single rule
 #[derive(Debug, Clone, PartialEq)]
 pub enum RuleConfig {
@@ -169,7 +186,7 @@ impl Config {
         let default_rules = [
             ("trailing-spaces", RuleLevel::Error),
             ("line-length", RuleLevel::Error),
-            ("document-start", RuleLevel::Disable),
+            ("document-start", RuleLevel::Warning),
             ("colons", RuleLevel::Error),
             ("key-duplicates", RuleLevel::Error),
             ("indentation", RuleLevel::Error),
@@ -203,42 +220,7 @@ impl Config {
 
     /// Create config with relaxed preset
     pub fn with_relaxed_preset() -> Self {
-        let mut config = Self::new();
-
-        // Relaxed configuration - most rules as warnings
-        let relaxed_rules = [
-            ("trailing-spaces", RuleLevel::Warning),
-            ("line-length", RuleLevel::Warning),
-            ("document-start", RuleLevel::Disable),
-            ("colons", RuleLevel::Warning),
-            ("key-duplicates", RuleLevel::Error),
-            ("indentation", RuleLevel::Warning),
-            ("new-line-at-end-of-file", RuleLevel::Warning),
-            ("new-lines", RuleLevel::Warning),
-            ("empty-lines", RuleLevel::Warning),
-            ("hyphens", RuleLevel::Warning),
-            ("comments", RuleLevel::Warning),
-            ("truthy", RuleLevel::Warning),
-            ("braces", RuleLevel::Warning),
-            ("brackets", RuleLevel::Warning),
-            ("anchors", RuleLevel::Error),
-            ("commas", RuleLevel::Warning),
-            ("comments-indentation", RuleLevel::Disable),
-            ("document-end", RuleLevel::Disable),
-            ("empty-values", RuleLevel::Disable),
-            ("float-values", RuleLevel::Disable),
-            ("key-ordering", RuleLevel::Disable),
-            ("octal-values", RuleLevel::Disable),
-            ("quoted-strings", RuleLevel::Disable),
-        ];
-
-        for (rule_name, level) in relaxed_rules {
-            config
-                .rules
-                .insert(rule_name.to_string(), RuleConfig::Level(level));
-        }
-
-        config
+        Self::load_from_str(RELAXED_PRESET).expect("built-in relaxed preset is valid")
     }
 
     /// Load config from a YAML file
@@ -646,7 +628,6 @@ impl Config {
         if let Some(extends) = yaml.get("extends").and_then(|v| v.as_str()) {
             config = match extends {
                 "default" => Self::with_default_preset(),
-                "relaxed" => Self::with_relaxed_preset(),
                 _ => {
                     return Err(crate::LintError::ConfigError(format!(
                         "Unknown preset: {}",
@@ -794,27 +775,31 @@ impl Config {
         let Some(Value::String(path)) = layer.get("extends") else {
             return Ok(yaml);
         };
-        if matches!(path.as_str(), "default" | "relaxed") {
+        if path == "default" {
             return Ok(yaml);
         }
 
-        let path = Path::new(path);
-        let canonical = path.canonicalize().map_err(|error| {
-            crate::LintError::ConfigError(format!("extends {}: {error}", path.display()))
-        })?;
-        if !seen.insert(canonical) {
+        let base = if path == "relaxed" {
+            Self::read_config_layers(RELAXED_PRESET, seen)?
+        } else {
+            let path = Path::new(path);
+            let canonical = path.canonicalize().map_err(|error| {
+                crate::LintError::ConfigError(format!("extends {}: {error}", path.display()))
+            })?;
+            if !seen.insert(canonical) {
+                return Err(crate::LintError::ConfigError(format!(
+                    "Circular config inheritance at {}",
+                    path.display()
+                )));
+            }
+            let parent = read_config_text(path).map_err(|error| {
+                crate::LintError::ConfigError(format!("extends {}: {error}", path.display()))
+            })?;
+            Self::read_config_layers(&parent, seen)?
+        };
+        let Value::Mapping(mut base) = base else {
             return Err(crate::LintError::ConfigError(format!(
-                "Circular config inheritance at {}",
-                path.display()
-            )));
-        }
-        let parent = read_config_text(path).map_err(|error| {
-            crate::LintError::ConfigError(format!("extends {}: {error}", path.display()))
-        })?;
-        let Value::Mapping(mut base) = Self::read_config_layers(&parent, seen)? else {
-            return Err(crate::LintError::ConfigError(format!(
-                "Extended config {} must be a mapping",
-                path.display()
+                "Extended config {path} must be a mapping"
             )));
         };
         layer.remove("extends");
@@ -1268,7 +1253,7 @@ mod tests {
         let config = Config::with_relaxed_preset();
         assert_eq!(
             config.get_rule_level("trailing-spaces"),
-            Some(RuleLevel::Warning)
+            Some(RuleLevel::Error)
         );
     }
 

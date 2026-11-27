@@ -107,7 +107,8 @@ impl RuleRegistry {
         let mut registry = Self::new();
         registry.register(Box::new(trailing_spaces::TrailingSpacesRule));
         registry.register(Box::new(line_length::LineLengthRule::new()));
-        registry.register(Box::new(document_start::DocumentStartRule::new()));
+        registry.register(Box::new(document_start::DocumentStartRule::required()));
+        registry.set_level("document-start", RuleLevel::Warning);
         registry.register(Box::new(colons::ColonsRule::new()));
         registry.register(Box::new(key_duplicates::KeyDuplicatesRule));
         registry.register(Box::new(indentation::IndentationRule::new()));

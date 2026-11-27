@@ -59,7 +59,7 @@ key: |
 
 ### document-start
 
-**Level**: Disable (default)
+**Level**: Warning (default preset)
 **Configurable**: Yes
 **Fixable**: ❌ No
 
@@ -497,33 +497,21 @@ the style configured by `new-lines` when that rule is enabled.
 
 Most enabled rules are errors. The exceptions and disabled rules are:
 
-- `document-start`: disabled
-- `comments`, `truthy`, and `comments-indentation`: warning
+- `document-start`, `comments`, `truthy`, and `comments-indentation`: warning
 - `document-end`, `empty-values`, `float-values`, `key-ordering`, `octal-values`, and `quoted-strings`: disabled
 
 Suitable for production code.
 
 ### relaxed
 
-Most rules as warnings:
+Changes to the default preset:
 
-- `trailing-spaces`: warning
-- `line-length`: warning
-- `colons`: warning
-- `indentation`: warning
-- `new-line-at-end-of-file`: warning
-- `new-lines`: warning
-- `empty-lines`: warning
-- `hyphens`: warning
-- `comments`: warning
-- `truthy`: warning
-- `braces`: warning
-- `brackets`: warning
-- `commas`: warning
-- `anchors` and `key-duplicates`: error
-- `comments-indentation`, `document-start`, `document-end`, `empty-values`, `float-values`, `key-ordering`, `octal-values`, and `quoted-strings`: disabled
-
-More permissive for development and experimentation.
+- `braces`, `brackets`, `colons`, `commas`, `empty-lines`, `hyphens`,
+  `indentation`, and `line-length` report warnings.
+- `braces` and `brackets` allow one space inside a nonempty collection.
+- `indentation` uses `indent-sequences: consistent`.
+- `line-length` allows non-breakable inline mappings.
+- `comments`, `comments-indentation`, `document-start`, and `truthy` are disabled.
 
 ## Phase 3 rules
 

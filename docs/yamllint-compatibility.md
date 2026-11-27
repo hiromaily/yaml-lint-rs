@@ -27,7 +27,7 @@ run in the upstream suite without a Rust CLI comparison.
 | `comments` | 24 | 24 | 23 | 23 |
 | `comments-indentation` | 24 | 24 | 24 | 24 |
 | `document-end` | 13 | 13 | 13 | 13 |
-| `document-start` | 21 | 20 | 20 | 15 |
+| `document-start` | 21 | 20 | 20 | 20 |
 | `empty-lines` | 32 | 32 | 32 | 32 |
 | `empty-values` | 62 | 62 | 62 | 62 |
 | `float-values` | 5 | 5 | 5 | 5 |
@@ -43,7 +43,7 @@ run in the upstream suite without a Rust CLI comparison.
 | `syntax` | 10 | 9 | 9 | 9 |
 | `trailing-spaces` | 12 | 10 | 10 | 10 |
 | `truthy` | 18 | 18 | 18 | 18 |
-| **Total** | 992 | 936 | 933 | 926 |
+| **Total** | 992 | 936 | 933 | 931 |
 
 Location comparisons include diagnostic rule IDs. The target column considers
 only the rule named by the fixture group. The other columns compare all
@@ -57,6 +57,3 @@ and had zero CLI config or file errors for the compared fixtures.
   and on tabs outside quoted scalars.
 - The audit forwards the collation locale selected by the upstream key-ordering
   fixtures to the Rust CLI.
-- The built-in presets still differ from upstream. The default preset keeps
-  `document-start` disabled, and the relaxed preset enables a different set of
-  warnings.

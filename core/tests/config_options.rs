@@ -3,6 +3,28 @@
 use yaml_lint_core::{Config, Linter};
 
 #[test]
+fn relaxed_preset_options_survive_partial_rule_overrides() {
+    let config = Config::load_from_str(
+        "extends: relaxed\nrules:\n  braces: enable\n  brackets: {level: error}\n  line-length: {max: 20}\n",
+    )
+    .unwrap();
+    let source = concat!(
+        "items: { a: [ b ] }\n",
+        "url: https://example.com/a/long/path\n",
+        "first:\n- yes\n",
+        "second:\n  - no\n",
+        "#comment\n",
+    );
+    let problems = Linter::new(config).lint_string(source).unwrap();
+    assert_eq!(problems.len(), 1);
+    assert_eq!(
+        (problems[0].rule.as_str(), problems[0].line),
+        ("indentation", 6)
+    );
+    assert_eq!(problems[0].level, yaml_lint_core::LintLevel::Warning);
+}
+
+#[test]
 fn test_line_length_custom_max() {
     let config_yaml = r#"
 rules:

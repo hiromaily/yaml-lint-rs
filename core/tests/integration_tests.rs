@@ -15,28 +15,25 @@ fn fixture_path(name: &str) -> PathBuf {
 #[test]
 fn test_valid_simple_yaml() {
     let linter = Linter::with_defaults();
-    let path = fixture_path("valid/simple.yaml");
-    let problems = linter.lint_file(&path).expect("Failed to lint file");
-
+    let problems = linter
+        .lint_file(&fixture_path("valid/simple.yaml"))
+        .unwrap();
     assert!(
-        problems.is_empty(),
-        "Expected no problems but found: {:?}",
         problems
+            .iter()
+            .all(|problem| problem.level == yaml_lint_core::LintLevel::Warning)
     );
 }
 
 #[test]
 fn test_valid_no_document_start() {
     let linter = Linter::with_defaults();
-    let path = fixture_path("valid/no-document-start.yaml");
-    let problems = linter.lint_file(&path).expect("Failed to lint file");
-
-    // Should pass because document-start is disabled by default
-    assert!(
-        problems.is_empty(),
-        "Expected no problems but found: {:?}",
-        problems
-    );
+    let problems = linter
+        .lint_file(&fixture_path("valid/no-document-start.yaml"))
+        .unwrap();
+    assert_eq!(problems.len(), 1);
+    assert_eq!(problems[0].rule, "document-start");
+    assert_eq!(problems[0].level, yaml_lint_core::LintLevel::Warning);
 }
 
 #[test]
@@ -45,12 +42,13 @@ fn test_trailing_spaces_detected() {
     let path = fixture_path("invalid/trailing-spaces.yaml");
     let problems = linter.lint_file(&path).expect("Failed to lint file");
 
-    assert!(!problems.is_empty(), "Expected to find trailing spaces");
-    assert_eq!(problems.len(), 3, "Expected 3 trailing space problems");
-
-    for problem in &problems {
-        assert_eq!(problem.rule, "trailing-spaces");
-    }
+    assert_eq!(
+        problems
+            .iter()
+            .filter(|p| p.rule == "trailing-spaces")
+            .count(),
+        3
+    );
 }
 
 #[test]
@@ -99,7 +97,7 @@ fn test_bad_colons_detected() {
 #[test]
 fn test_lint_string() {
     let linter = Linter::with_defaults();
-    let yaml = "key: value   \n";
+    let yaml = "---\nkey: value   \n";
     let problems = linter.lint_string(yaml).expect("Failed to lint string");
 
     assert_eq!(problems.len(), 1);
@@ -118,7 +116,7 @@ rules:
     let config = Config::load_from_str(config_yaml).expect("Failed to load config");
     let linter = Linter::new(config);
 
-    let yaml = "key: value   \n";
+    let yaml = "---\nkey: value   \n";
     let problems = linter.lint_string(yaml).expect("Failed to lint string");
 
     assert_eq!(problems.len(), 1);
@@ -133,9 +131,9 @@ fn test_relaxed_preset() {
     let yaml = "key: value   \n";
     let problems = linter.lint_string(yaml).expect("Failed to lint string");
 
-    // Relaxed preset should still catch trailing spaces but as warning
-    assert!(!problems.is_empty());
-    assert_eq!(problems[0].level, yaml_lint_core::LintLevel::Warning);
+    assert_eq!(problems.len(), 1);
+    assert_eq!(problems[0].rule, "trailing-spaces");
+    assert_eq!(problems[0].level, yaml_lint_core::LintLevel::Error);
 }
 
 #[test]
@@ -147,7 +145,7 @@ fn test_disable_rule() {
     );
     let linter = Linter::new(config);
 
-    let yaml = "key: value   \n";
+    let yaml = "---\nkey: value   \n";
     let problems = linter.lint_string(yaml).expect("Failed to lint string");
 
     // Trailing spaces should be ignored
@@ -321,8 +319,10 @@ fn test_new_lines_detects_crlf_in_a_file() {
 
 #[test]
 fn test_fix_preserves_crlf_and_adds_configured_final_ending() {
-    let config =
-        Config::load_from_str("extends: default\nrules:\n  new-lines: {type: dos}\n").unwrap();
+    let config = Config::load_from_str(
+        "extends: default\nrules:\n  new-lines: {type: dos}\n  document-start: disable\n",
+    )
+    .unwrap();
     let registry = config.create_registry();
     let fixer = Fixer::new(&registry);
 
@@ -341,7 +341,9 @@ fn test_fix_preserves_crlf_and_adds_configured_final_ending() {
 
 #[test]
 fn test_fix_preserves_an_explicitly_suppressed_mixed_ending() {
-    let registry = Config::default().create_registry();
+    let registry = Config::load_from_str("extends: default\nrules: {document-start: disable}")
+        .unwrap()
+        .create_registry();
     let result = Fixer::new(&registry).fix(
         "test.yaml",
         "key: value  # yamllint disable-line rule:new-lines\r\nother: value  \n",

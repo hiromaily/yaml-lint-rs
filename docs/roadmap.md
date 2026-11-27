@@ -18,6 +18,7 @@
   - [x] Match audited diagnostics for empty lines, empty values, line length, line endings, duplicate keys, and quoted strings
   - [x] Support block sequence indentation policies and check multiline flow indentation
   - [x] Support multiline string indentation checks and match the locale-sensitive ordering fixtures
-  - [ ] Resolve remaining differences in indentation, parser behavior, and presets
+  - [x] Match the default and relaxed presets
+  - [ ] Resolve remaining differences in indentation and parser behavior
 - [x] Phase 4: Performance optimizations, parallel linting
 - [ ] Phase 5: Editor integration (LSP?)

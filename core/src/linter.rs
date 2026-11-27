@@ -62,7 +62,7 @@ mod tests {
     #[test]
     fn test_lint_valid_yaml() {
         let linter = Linter::with_defaults();
-        let yaml = "key: value\nkey2: value2\n";
+        let yaml = "---\nkey: value\nkey2: value2\n";
         let problems = linter.lint_string(yaml).unwrap();
         assert!(problems.is_empty());
     }
@@ -70,7 +70,7 @@ mod tests {
     #[test]
     fn test_lint_with_trailing_spaces() {
         let linter = Linter::with_defaults();
-        let yaml = "key: value   \nkey2: value2\n";
+        let yaml = "---\nkey: value   \nkey2: value2\n";
         let problems = linter.lint_string(yaml).unwrap();
         assert_eq!(problems.len(), 1);
         assert_eq!(problems[0].rule, "trailing-spaces");

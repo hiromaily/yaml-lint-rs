@@ -24,7 +24,10 @@ fn json_output_contains_diagnostics_from_multiple_files() {
     );
     assert_eq!(output.status.code(), Some(1));
     let diagnostics: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
-    let first = &diagnostics[0];
+    let first = diagnostics
+        .iter()
+        .find(|problem| problem["rule"] == "trailing-spaces")
+        .unwrap();
     assert!(
         first["file"]
             .as_str()
@@ -49,7 +52,7 @@ fn json_output_contains_diagnostics_from_multiple_files() {
 
 #[test]
 fn json_output_is_an_empty_array_for_clean_files() {
-    let output = lint("default", &[], &["valid/simple.yaml"]);
+    let output = lint("default", &[], &["valid/with-document-start.yaml"]);
     assert!(output.status.success());
     assert_eq!(output.stdout, b"[]\n");
 }
@@ -57,7 +60,7 @@ fn json_output_is_an_empty_array_for_clean_files() {
 #[test]
 fn json_output_preserves_warning_exit_codes() {
     for (args, expected) in [(&[][..], 0), (&["--strict"][..], 2)] {
-        let output = lint("relaxed", args, &["invalid/trailing-spaces.yaml"]);
+        let output = lint("default", args, &["valid/no-document-start.yaml"]);
         assert_eq!(output.status.code(), Some(expected));
         let diagnostics: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
         assert!(!diagnostics.is_empty());

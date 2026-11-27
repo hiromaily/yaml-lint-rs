@@ -221,6 +221,7 @@ mod directive_tests {
         use crate::rules::empty_lines::EmptyLinesRule;
 
         let mut registry = RuleRegistry::with_defaults();
+        registry.set_level("document-start", crate::rules::RuleLevel::Disable);
         registry.register(Box::new(EmptyLinesRule::with_config(0, 0, 0)));
         let yaml = "a: value\n# yamllint disable-line rule:trailing-spaces\n\n\nb: value   \n";
         let result = Fixer::new(&registry).fix("test.yaml", yaml);
