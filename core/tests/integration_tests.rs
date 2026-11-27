@@ -352,3 +352,41 @@ fn test_fix_preserves_an_explicitly_suppressed_mixed_ending() {
         Some("key: value  # yamllint disable-line rule:new-lines\r\nother: value\n"),
     );
 }
+
+#[test]
+fn phase_3_rules_report_fixture_locations() {
+    let config = Config::load_from_str(
+        "rules:
+  anchors: {}
+  commas: enable
+  comments-indentation: {level: warning}
+  document-end: {}
+  empty-values: {}
+  float-values: {forbid-inf: true}
+  key-ordering: {}
+  octal-values: {}
+  quoted-strings: {}",
+    )
+    .unwrap();
+    let problems = Linter::new(config)
+        .lint_file(&fixture_path("invalid/phase-3.yaml"))
+        .unwrap();
+    for (rule, line, column) in [
+        ("anchors", 2, 8),
+        ("commas", 3, 12),
+        ("comments-indentation", 4, 3),
+        ("document-end", 9, 1),
+        ("empty-values", 5, 7),
+        ("float-values", 6, 8),
+        ("key-ordering", 9, 1),
+        ("octal-values", 7, 11),
+        ("quoted-strings", 8, 7),
+    ] {
+        assert!(
+            problems.iter().any(|problem| {
+                problem.rule == rule && problem.line == line && problem.column == column
+            }),
+            "missing {rule} at {line}:{column}: {problems:?}"
+        );
+    }
+}

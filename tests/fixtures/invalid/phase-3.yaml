@@ -1,0 +1,9 @@
+---
+alias: *undeclared
+flow: [one,two]
+  # Misaligned comment
+empty:
+float: .inf
+octal: 012
+text: unquoted
+aardvark: 1

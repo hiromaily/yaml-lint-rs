@@ -2,7 +2,11 @@
 
 use crate::Result;
 use crate::rules::{
-    RuleLevel, new_line_at_end_of_file::NewLineAtEndOfFileRule, new_lines::NewLineType,
+    RuleLevel, anchors::AnchorsRule, commas::CommasRule,
+    comments_indentation::CommentsIndentationRule, document_end::DocumentEndRule,
+    empty_values::EmptyValuesRule, float_values::FloatValuesRule, key_ordering::KeyOrderingRule,
+    new_line_at_end_of_file::NewLineAtEndOfFileRule, new_lines::NewLineType,
+    octal_values::OctalValuesRule, quoted_strings::QuotedStringsRule,
 };
 use indexmap::IndexMap;
 use std::path::Path;
@@ -40,6 +44,15 @@ impl RuleConfig {
 /// Rule-specific options
 #[derive(Debug, Clone, PartialEq)]
 pub enum RuleOptions {
+    Anchors(AnchorsRule),
+    Commas(CommasRule),
+    CommentsIndentation,
+    DocumentEnd(DocumentEndRule),
+    EmptyValues(EmptyValuesRule),
+    FloatValues(FloatValuesRule),
+    KeyOrdering(KeyOrderingRule),
+    OctalValues(OctalValuesRule),
+    QuotedStrings(QuotedStringsRule),
     LineLength {
         max: usize,
     },
@@ -131,7 +144,6 @@ impl Config {
     pub fn with_default_preset() -> Self {
         let mut config = Self::new();
 
-        // Default configuration - all rules enabled as errors
         let default_rules = [
             ("trailing-spaces", RuleLevel::Error),
             ("line-length", RuleLevel::Error),
@@ -147,6 +159,15 @@ impl Config {
             ("truthy", RuleLevel::Warning),
             ("braces", RuleLevel::Error),
             ("brackets", RuleLevel::Error),
+            ("anchors", RuleLevel::Error),
+            ("commas", RuleLevel::Error),
+            ("comments-indentation", RuleLevel::Warning),
+            ("document-end", RuleLevel::Disable),
+            ("empty-values", RuleLevel::Disable),
+            ("float-values", RuleLevel::Disable),
+            ("key-ordering", RuleLevel::Disable),
+            ("octal-values", RuleLevel::Disable),
+            ("quoted-strings", RuleLevel::Disable),
         ];
 
         for (rule_name, level) in default_rules {
@@ -178,6 +199,15 @@ impl Config {
             ("truthy", RuleLevel::Warning),
             ("braces", RuleLevel::Warning),
             ("brackets", RuleLevel::Warning),
+            ("anchors", RuleLevel::Error),
+            ("commas", RuleLevel::Warning),
+            ("comments-indentation", RuleLevel::Disable),
+            ("document-end", RuleLevel::Disable),
+            ("empty-values", RuleLevel::Disable),
+            ("float-values", RuleLevel::Disable),
+            ("key-ordering", RuleLevel::Disable),
+            ("octal-values", RuleLevel::Disable),
+            ("quoted-strings", RuleLevel::Disable),
         ];
 
         for (rule_name, level) in relaxed_rules {
@@ -209,11 +239,42 @@ impl Config {
             "document-start" => Self::parse_document_start_options(map),
             "braces" => Self::parse_braces_options(map),
             "brackets" => Self::parse_brackets_options(map),
+            "anchors" => Self::parse_options(rule_name, map).map(RuleOptions::Anchors),
+            "commas" => Self::parse_options(rule_name, map).map(RuleOptions::Commas),
+            "comments-indentation" => {
+                if map.keys().all(|key| key.as_str() == Some("level")) {
+                    Ok(RuleOptions::CommentsIndentation)
+                } else {
+                    Err(crate::LintError::ConfigError(
+                        "comments-indentation does not support options".into(),
+                    ))
+                }
+            }
+            "document-end" => Self::parse_options(rule_name, map).map(RuleOptions::DocumentEnd),
+            "empty-values" => Self::parse_options(rule_name, map).map(RuleOptions::EmptyValues),
+            "float-values" => Self::parse_options(rule_name, map).map(RuleOptions::FloatValues),
+            "key-ordering" => Self::parse_options(rule_name, map).map(RuleOptions::KeyOrdering),
+            "octal-values" => Self::parse_options(rule_name, map).map(RuleOptions::OctalValues),
+            "quoted-strings" => {
+                let rule: QuotedStringsRule = Self::parse_options(rule_name, map)?;
+                rule.validate()?;
+                Ok(RuleOptions::QuotedStrings(rule))
+            }
             _ => Err(crate::LintError::ConfigError(format!(
                 "Rule '{}' does not support options",
                 rule_name
             ))),
         }
+    }
+
+    fn parse_options<T: serde::de::DeserializeOwned>(
+        rule: &str,
+        map: &serde_yaml::Mapping,
+    ) -> Result<T> {
+        let mut options = map.clone();
+        options.remove("level");
+        serde_yaml::from_value(serde_yaml::Value::Mapping(options))
+            .map_err(|error| crate::LintError::ConfigError(format!("{rule}: {error}")))
     }
 
     /// Parse new-lines options
@@ -528,7 +589,7 @@ impl Config {
                     // Simple string level: "error", "warning", "disable"
                     serde_yaml::Value::String(s) => {
                         let level = match s.as_str() {
-                            "error" => RuleLevel::Error,
+                            "enable" | "error" => RuleLevel::Error,
                             "warning" => RuleLevel::Warning,
                             "disable" => RuleLevel::Disable,
                             _ => {
@@ -787,6 +848,63 @@ impl Config {
                     ),
                     crate::rules::brackets::BracketsRule::new()
                 ),
+                "anchors" => {
+                    construct_rule!(
+                        rule_config,
+                        RuleOptions::Anchors(rule) => rule.clone(),
+                        AnchorsRule::default()
+                    )
+                }
+                "commas" => {
+                    construct_rule!(
+                        rule_config,
+                        RuleOptions::Commas(rule) => rule.clone(),
+                        CommasRule::default()
+                    )
+                }
+                "comments-indentation" => Box::new(CommentsIndentationRule),
+                "document-end" => {
+                    construct_rule!(
+                        rule_config,
+                        RuleOptions::DocumentEnd(rule) => rule.clone(),
+                        DocumentEndRule::default()
+                    )
+                }
+                "empty-values" => {
+                    construct_rule!(
+                        rule_config,
+                        RuleOptions::EmptyValues(rule) => rule.clone(),
+                        EmptyValuesRule::default()
+                    )
+                }
+                "float-values" => {
+                    construct_rule!(
+                        rule_config,
+                        RuleOptions::FloatValues(rule) => rule.clone(),
+                        FloatValuesRule::default()
+                    )
+                }
+                "key-ordering" => {
+                    construct_rule!(
+                        rule_config,
+                        RuleOptions::KeyOrdering(rule) => rule.clone(),
+                        KeyOrderingRule::default()
+                    )
+                }
+                "octal-values" => {
+                    construct_rule!(
+                        rule_config,
+                        RuleOptions::OctalValues(rule) => rule.clone(),
+                        OctalValuesRule::default()
+                    )
+                }
+                "quoted-strings" => {
+                    construct_rule!(
+                        rule_config,
+                        RuleOptions::QuotedStrings(rule) => rule.clone(),
+                        QuotedStringsRule::default()
+                    )
+                }
                 _ => continue, // Skip unknown rules
             };
 

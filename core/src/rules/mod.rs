@@ -3,20 +3,30 @@
 use crate::problem::LintProblem;
 use indexmap::IndexMap;
 
+pub mod anchors;
 pub mod braces;
 pub mod brackets;
 pub mod colons;
+pub mod commas;
 pub mod comments;
+pub mod comments_indentation;
 mod directives;
+pub mod document_end;
 pub mod document_start;
 pub mod empty_lines;
+pub mod empty_values;
+pub mod float_values;
 pub mod flow_collection;
 pub mod hyphens;
 pub mod indentation;
 pub mod key_duplicates;
+pub mod key_ordering;
 pub mod line_length;
 pub mod new_line_at_end_of_file;
 pub mod new_lines;
+pub mod octal_values;
+pub mod quoted_strings;
+mod tokens;
 pub mod trailing_spaces;
 pub mod truthy;
 
@@ -106,6 +116,22 @@ impl RuleRegistry {
         registry.register(Box::new(truthy::TruthyRule::new()));
         registry.register(Box::new(braces::BracesRule::new()));
         registry.register(Box::new(brackets::BracketsRule::new()));
+        registry.register(Box::new(anchors::AnchorsRule::default()));
+        registry.register(Box::new(commas::CommasRule::default()));
+        registry.register(Box::new(comments_indentation::CommentsIndentationRule));
+        registry.set_level("comments-indentation", RuleLevel::Warning);
+        registry.register(Box::new(document_end::DocumentEndRule::default()));
+        registry.set_level("document-end", RuleLevel::Disable);
+        registry.register(Box::new(empty_values::EmptyValuesRule::default()));
+        registry.set_level("empty-values", RuleLevel::Disable);
+        registry.register(Box::new(float_values::FloatValuesRule::default()));
+        registry.set_level("float-values", RuleLevel::Disable);
+        registry.register(Box::new(key_ordering::KeyOrderingRule::default()));
+        registry.set_level("key-ordering", RuleLevel::Disable);
+        registry.register(Box::new(octal_values::OctalValuesRule::default()));
+        registry.set_level("octal-values", RuleLevel::Disable);
+        registry.register(Box::new(quoted_strings::QuotedStringsRule::default()));
+        registry.set_level("quoted-strings", RuleLevel::Disable);
         registry
     }
 
