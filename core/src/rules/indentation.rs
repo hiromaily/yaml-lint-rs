@@ -596,7 +596,10 @@ fn check_block_indentation(
                     continue;
                 };
                 let before_entry: String = line.chars().take(mark.col()).collect();
-                let before_dash = before_entry.trim_end_matches([' ', '\t']);
+                let before_dash = before_entry
+                    .split_once('#')
+                    .map_or(before_entry.as_str(), |(source, _)| source)
+                    .trim_end_matches([' ', '\t']);
                 let Some(prefix) = before_dash.strip_suffix('-') else {
                     continue;
                 };
@@ -617,31 +620,43 @@ fn check_block_indentation(
                 if child.line() <= mark.line()
                     || matches!(
                         kind,
-                        BlockEnd
-                            | BlockEntry
-                            | DocumentEnd
-                            | DocumentStart
-                            | StreamEnd
-                            | Scalar(TScalarStyle::Literal | TScalarStyle::Folded, _)
+                        BlockEnd | BlockEntry | DocumentEnd | DocumentStart | StreamEnd
                     )
                 {
                     continue;
                 }
-                if child.col() > column {
-                    let expected = column.saturating_add(
-                        width.get_or_insert((child.line(), child.col() - column)).1,
-                    );
-                    if child.col() != expected {
-                        problems.push(LintProblem::new(
-                            child.line(),
-                            child.col() + 1,
-                            format!(
-                                "wrong indentation: expected {expected} but found {}",
-                                child.col()
-                            ),
-                            "indentation",
-                            LintLevel::Error,
-                        ));
+                let (child_line, child_column) = if matches!(
+                    kind,
+                    Scalar(TScalarStyle::Literal | TScalarStyle::Folded, _)
+                ) {
+                    if matches!(line.chars().nth(mark.col()), Some('|' | '>')) {
+                        continue;
+                    }
+                    // yaml-rust2 marks the scalar body rather than the header.
+                    let Some((offset, header)) = context.lines[mark.line()..]
+                        .iter()
+                        .take(child.line() - mark.line())
+                        .enumerate()
+                        .find(|(_, line)| {
+                            let text = line.trim_start();
+                            !text.is_empty() && !text.starts_with('#')
+                        })
+                        .filter(|(_, line)| line.trim_start().starts_with(['|', '>']))
+                    else {
+                        continue;
+                    };
+                    (
+                        mark.line() + offset + 1,
+                        header.len() - header.trim_start().len(),
+                    )
+                } else {
+                    (child.line(), child.col())
+                };
+                if child_column > column {
+                    let expected = column
+                        .saturating_add(width.get_or_insert((child_line, child_column - column)).1);
+                    if child_column != expected {
+                        problems.push(indentation_problem(child_line, child_column, expected));
                     }
                 }
             }
@@ -796,6 +811,19 @@ fn detect_indent_size(context: &LintContext) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn checks_block_scalar_header_after_bare_sequence_entry() {
+        for indicator in ['|', '>'] {
+            let yaml = format!("---\n-\n  -\n     {indicator}\n      multi\n      line\n...\n");
+            let rule = IndentationRule::new();
+            let problems = rule.check(&LintContext::new(yaml));
+            assert_eq!(problems, vec![indentation_problem(4, 5, 4)]);
+
+            let yaml = format!("---\n-\n  -\n    {indicator}\n      multi\n      line\n...\n");
+            assert!(rule.check(&LintContext::new(yaml)).is_empty());
+        }
+    }
 
     #[test]
     fn test_correct_indentation() {
