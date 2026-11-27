@@ -72,6 +72,46 @@ mod tests {
     use crate::{Config, Fixer, LintLevel, Linter};
 
     #[test]
+    fn requires_an_explicit_start_after_an_explicit_document_end() {
+        let config =
+            Config::load_from_str("rules:\n  document-start: {present: true, level: warning}\n")
+                .unwrap();
+        let registry = config.create_registry();
+        let linter = Linter::new(config);
+        let source = "---\nfirst: document\n...\nsecond: document\n---\nthird: document\n";
+        let problems = linter.lint_string(source).unwrap();
+        assert_eq!(problems.len(), 1);
+        let problem = &problems[0];
+        assert_eq!(
+            (problem.line, problem.column, problem.rule.as_str()),
+            (4, 1, "syntax")
+        );
+        assert_eq!(
+            problem.message,
+            "syntax error: expected '<document start>', but found '<block mapping start>'"
+        );
+        assert_eq!(
+            Fixer::new(&registry)
+                .dry_run("documents.yaml", source)
+                .unfixable_problems,
+            problems
+        );
+
+        let source = "first: document\n...\n---\nsecond: document\n";
+        let problems = linter.lint_string(source).unwrap();
+        assert_eq!(problems.len(), 1);
+        assert_eq!(
+            (
+                problems[0].line,
+                problems[0].column,
+                problems[0].rule.as_str(),
+                problems[0].level
+            ),
+            (1, 1, "document-start", LintLevel::Warning)
+        );
+    }
+
+    #[test]
     fn recognizes_alias_keys_immediately_followed_by_a_colon() {
         let config =
             Config::load_from_str("rules:\n  anchors: enable\n  colons: enable\n").unwrap();

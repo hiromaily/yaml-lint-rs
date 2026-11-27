@@ -11,3 +11,8 @@ Local scanner changes
   checks that the delimiter matches the open collection.
 - End alias keys before a mapping separator using the scanner's existing
   separator rules.
+
+Local parser changes
+
+- Require an explicit start marker for subsequent documents, including
+  after an explicit end marker, to match yamllint's syntax diagnostics.

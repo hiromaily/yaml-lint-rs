@@ -600,10 +600,41 @@ impl<T: Iterator<Item = char>> Parser<T> {
                 self.skip();
                 Ok((Event::DocumentStart, mark))
             }
-            Token(mark, _) => Err(ScanError::new(
-                mark,
-                "did not find expected <document start>",
-            )),
+            Token(mark, ref token) => {
+                let found = match token {
+                    TokenType::BlockMappingStart => "<block mapping start>",
+                    TokenType::BlockSequenceStart => "<block sequence start>",
+                    TokenType::FlowMappingStart => "{",
+                    TokenType::FlowSequenceStart => "[",
+                    TokenType::Scalar(..) => "<scalar>",
+                    TokenType::Alias(_) => "<alias>",
+                    TokenType::Anchor(_) => "<anchor>",
+                    TokenType::Tag(..) => "<tag>",
+                    _ => {
+                        return Err(ScanError::new(
+                            mark,
+                            "did not find expected <document start>",
+                        ));
+                    }
+                };
+                let mark = if matches!(token, TokenType::BlockMappingStart) {
+                    // The scanner inserts an implicit mapping start at its
+                    // first colon. Point to the key that opened the mapping.
+                    self.skip();
+                    let Token(key, _) = *self.peek_token()?;
+                    if key.index() < mark.index() {
+                        key
+                    } else {
+                        mark
+                    }
+                } else {
+                    mark
+                };
+                Err(ScanError::new(
+                    mark,
+                    &format!("expected '<document start>', but found '{found}'"),
+                ))
+            }
         }
     }
 
@@ -639,19 +670,17 @@ impl<T: Iterator<Item = char>> Parser<T> {
         if !self.keep_tags {
             self.tags.clear();
         }
-        if explicit_end {
-            self.state = State::ImplicitDocumentStart;
-        } else {
-            if let Token(mark, TokenType::VersionDirective(..) | TokenType::TagDirective(..)) =
+        if !explicit_end
+            && let Token(mark, TokenType::VersionDirective(..) | TokenType::TagDirective(..)) =
                 *self.peek_token()?
-            {
-                return Err(ScanError::new(
-                    mark,
-                    "missing explicit document end marker before directive",
-                ));
-            }
-            self.state = State::DocumentStart;
+        {
+            return Err(ScanError::new(
+                mark,
+                "missing explicit document end marker before directive",
+            ));
         }
+        // yamllint requires a document start marker after the first document.
+        self.state = State::DocumentStart;
 
         Ok((Event::DocumentEnd, marker))
     }
