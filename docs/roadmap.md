@@ -19,6 +19,7 @@
   - [x] Support block sequence indentation policies and check multiline flow indentation
   - [x] Support multiline string indentation checks and match the locale-sensitive ordering fixtures
   - [x] Match the default and relaxed presets
+  - [x] Infer consistent indentation from block structure and apply it to later values
   - [ ] Resolve remaining differences in indentation and parser behavior
 - [x] Phase 4: Performance optimizations, parallel linting
 - [ ] Phase 5: Editor integration (LSP?)

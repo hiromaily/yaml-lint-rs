@@ -209,6 +209,18 @@ fn multiline_string_indentation_preserves_scalar_content_boundaries() {
 }
 
 #[test]
+fn indentation_uses_the_first_block_width_for_later_mapping_and_flow_values() {
+    let config = Config::load_from_str("rules: {indentation: enable}").unwrap();
+    let source = "first:\n  key: value\nsecond:\n    key: value\nflow: [\n   value\n]\n";
+    let problems = Linter::new(config).lint_string(source).unwrap();
+    let positions: Vec<_> = problems
+        .iter()
+        .map(|p| (p.rule.as_str(), p.line, p.column))
+        .collect();
+    assert_eq!(positions, [("indentation", 4, 5), ("indentation", 6, 4)]);
+}
+
+#[test]
 fn test_indentation_fixed_spaces() {
     let config_yaml = r#"
 rules:

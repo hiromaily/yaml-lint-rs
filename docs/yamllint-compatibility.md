@@ -32,7 +32,7 @@ run in the upstream suite without a Rust CLI comparison.
 | `empty-values` | 62 | 62 | 62 | 62 |
 | `float-values` | 5 | 5 | 5 | 5 |
 | `hyphens` | 20 | 20 | 20 | 20 |
-| `indentation` | 270 | 222 | 221 | 219 |
+| `indentation` | 270 | 262 | 256 | 256 |
 | `key-duplicates` | 33 | 33 | 33 | 33 |
 | `key-ordering` | 21 | 21 | 21 | 21 |
 | `line-length` | 50 | 50 | 50 | 50 |
@@ -43,7 +43,7 @@ run in the upstream suite without a Rust CLI comparison.
 | `syntax` | 10 | 9 | 9 | 9 |
 | `trailing-spaces` | 12 | 10 | 10 | 10 |
 | `truthy` | 18 | 18 | 18 | 18 |
-| **Total** | 992 | 936 | 933 | 931 |
+| **Total** | 992 | 976 | 968 | 968 |
 
 Location comparisons include diagnostic rule IDs. The target column considers
 only the rule named by the fixture group. The other columns compare all
