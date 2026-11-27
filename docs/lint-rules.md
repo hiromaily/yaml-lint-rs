@@ -161,7 +161,13 @@ Validates consistent indentation throughout the document.
 rules:
   indentation:
     spaces: 2           # Or 4, or "consistent" to auto-detect
+    indent-sequences: true
 ```
+
+`indent-sequences` controls block sequences used as mapping values. Set it to
+`true` to indent the entries, `false` to align them with the mapping key,
+`whatever` to accept either style, or `consistent` to use the first style
+throughout the stream.
 
 **Why it matters**: Inconsistent indentation can make YAML difficult to read and may lead to parsing errors.
 

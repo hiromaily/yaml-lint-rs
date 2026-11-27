@@ -2,6 +2,9 @@
 
 use crate::Result;
 use crate::path_patterns::PathPatterns;
+use crate::rules::indentation::{
+    ConfiguredIndentation, IndentSequences, IndentSpaces, IndentationRule,
+};
 use crate::rules::{
     FlowPolicy, RuleLevel, anchors::AnchorsRule, commas::CommasRule,
     comments_indentation::CommentsIndentationRule, document_end::DocumentEndRule,
@@ -67,6 +70,10 @@ pub enum RuleOptions {
     },
     Indentation {
         spaces: IndentConfig,
+    },
+    IndentationWithSequences {
+        spaces: IndentConfig,
+        sequences: IndentSequences,
     },
     Colons {
         max_spaces_before: usize,
@@ -375,7 +382,18 @@ impl Config {
             }
         };
 
-        Ok(RuleOptions::Indentation { spaces })
+        let sequences = match map.get("indent-sequences") {
+            None => return Ok(RuleOptions::Indentation { spaces }),
+            Some(serde_yaml::Value::Bool(true)) => IndentSequences::Indented,
+            Some(serde_yaml::Value::Bool(false)) => IndentSequences::Unindented,
+            Some(value) if value.as_str() == Some("whatever") => IndentSequences::Whatever,
+            Some(value) if value.as_str() == Some("consistent") => IndentSequences::Consistent,
+            _ => return Err(crate::LintError::ConfigError(
+                "indentation 'indent-sequences' must be true, false, 'whatever', or 'consistent'"
+                    .into(),
+            )),
+        };
+        Ok(RuleOptions::IndentationWithSequences { spaces, sequences })
     }
 
     /// Parse colons options
@@ -989,20 +1007,23 @@ impl Config {
                     RuleOptions::KeyDuplicates(rule) => rule.clone(),
                     crate::rules::key_duplicates::KeyDuplicatesRule
                 ),
-                "indentation" => {
-                    if let Some(RuleOptions::Indentation { spaces }) = rule_config.options() {
-                        match spaces {
-                            IndentConfig::Fixed(n) => Box::new(
-                                crate::rules::indentation::IndentationRule::with_spaces(*n),
-                            ),
-                            IndentConfig::Consistent => {
-                                Box::new(crate::rules::indentation::IndentationRule::consistent())
-                            }
-                        }
-                    } else {
-                        Box::new(crate::rules::indentation::IndentationRule::new())
+                "indentation" => match rule_config.options() {
+                    Some(RuleOptions::Indentation {
+                        spaces: IndentConfig::Fixed(n),
+                    }) => Box::new(IndentationRule::with_spaces(*n)),
+                    Some(RuleOptions::IndentationWithSequences { spaces, sequences }) => {
+                        Box::new(ConfiguredIndentation {
+                            rule: IndentationRule {
+                                spaces: match spaces {
+                                    IndentConfig::Fixed(n) => IndentSpaces::Fixed(*n),
+                                    IndentConfig::Consistent => IndentSpaces::Consistent,
+                                },
+                            },
+                            sequences: *sequences,
+                        })
                     }
-                }
+                    _ => Box::new(IndentationRule::new()),
+                },
                 "new-lines" => Box::new(crate::rules::new_lines::NewLinesRule { newline_type }),
                 "new-line-at-end-of-file" => {
                     Box::new(NewLineAtEndOfFileRule::with_ending(newline_type.ending()))

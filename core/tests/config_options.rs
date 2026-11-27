@@ -98,6 +98,65 @@ fn file_extends_inherits_options_and_decodes_ignore_file() {
 }
 
 #[test]
+fn indentation_sequence_policies_apply_to_mapping_values() {
+    let source = "first:\n- a\nsecond:\n  - b\n";
+    for (policy, expected) in [
+        ("true", &[2][..]),
+        ("false", &[4]),
+        ("whatever", &[]),
+        ("consistent", &[4]),
+    ] {
+        let config = Config::load_from_str(&format!(
+            "rules: {{indentation: {{spaces: 2, indent-sequences: {policy}}}}}"
+        ))
+        .unwrap();
+        let problems = Linter::new(config).lint_string(source).unwrap();
+        let lines: Vec<_> = problems.iter().map(|problem| problem.line).collect();
+        assert_eq!(lines, expected, "policy {policy}");
+        assert!(problems.iter().all(|problem| problem.rule == "indentation"));
+    }
+    assert!(Config::load_from_str("rules: {indentation: {indent-sequences: invalid}}").is_err());
+}
+
+#[test]
+fn flow_indentation_checks_values_and_closing_delimiters() {
+    let config = Config::load_from_str("rules: {indentation: {spaces: 2}}").unwrap();
+    let source = "items: [\n  first,\n   second,\n  ]\n";
+    let problems = Linter::new(config).lint_string(source).unwrap();
+    let diagnostics: Vec<_> = problems
+        .iter()
+        .map(|problem| {
+            (
+                problem.rule.as_str(),
+                problem.line,
+                problem.column,
+                problem.message.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        diagnostics,
+        [
+            (
+                "indentation",
+                3,
+                4,
+                "wrong indentation: expected 2 but found 3"
+            ),
+            (
+                "indentation",
+                4,
+                3,
+                "wrong indentation: expected 0 but found 2"
+            ),
+        ]
+    );
+    let source = "items: [\n  first,\n  key: value,\n]\n";
+    let config = Config::load_from_str("rules: {indentation: enable}").unwrap();
+    assert!(Linter::new(config).lint_string(source).unwrap().is_empty());
+}
+
+#[test]
 fn test_indentation_fixed_spaces() {
     let config_yaml = r#"
 rules:

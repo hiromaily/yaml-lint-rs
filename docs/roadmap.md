@@ -16,6 +16,7 @@
   - [x] [Audit all 23 rules against yamllint v1.38.0 fixtures](yamllint-compatibility.md)
   - [x] Support config-file inheritance and UTF-16/UTF-32 config and ignore files
   - [x] Match audited diagnostics for empty lines, empty values, line length, line endings, duplicate keys, and quoted strings
+  - [x] Support block sequence indentation policies and check multiline flow indentation
   - [ ] Resolve remaining differences in indentation, parser behavior, locale-sensitive ordering, and presets
 - [x] Phase 4: Performance optimizations, parallel linting
 - [ ] Phase 5: Editor integration (LSP?)

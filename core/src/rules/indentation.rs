@@ -1,7 +1,10 @@
 //! Indentation rule - validates consistent indentation
 
+use super::tokens::scan;
 use crate::problem::{LintLevel, LintProblem};
-use crate::rules::{LintContext, Rule, RuleLevel};
+use crate::rules::{LintContext, Rule};
+use std::collections::HashSet;
+use yaml_rust2::scanner::{TScalarStyle, Token, TokenType::*};
 
 /// Indentation configuration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,12 +51,66 @@ impl Default for IndentationRule {
     }
 }
 
+/// Indentation policy for a block sequence used as a mapping value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IndentSequences {
+    /// Require an additional indentation level.
+    Indented,
+    /// Align sequence entries with their mapping key.
+    Unindented,
+    /// Allow either indentation style.
+    Whatever,
+    /// Use the same style for every sequence in the stream.
+    Consistent,
+}
+
+#[derive(Debug)]
+pub(crate) struct ConfiguredIndentation {
+    pub(crate) rule: IndentationRule,
+    pub(crate) sequences: IndentSequences,
+}
+
+impl Rule for ConfiguredIndentation {
+    fn name(&self) -> &'static str {
+        self.rule.name()
+    }
+
+    fn check(&self, context: &LintContext) -> Vec<LintProblem> {
+        let mut problems = self.rule.check_lines(context);
+        let fixed = match self.rule.spaces {
+            IndentSpaces::Fixed(spaces) => Some(spaces),
+            IndentSpaces::Consistent => None,
+        };
+        let tokens = scan(&context.content);
+        let mut structural = Vec::new();
+        let mut flow_lines = check_flows(context, &tokens, fixed, &mut structural);
+        check_sequences(context, &tokens, fixed, self.sequences, &mut structural);
+        flow_lines.extend(structural.iter().map(|problem| problem.line));
+        problems.retain(|problem| !flow_lines.contains(&problem.line));
+        problems.extend(structural);
+        problems.sort();
+        problems
+    }
+}
+
 impl Rule for IndentationRule {
     fn name(&self) -> &'static str {
         "indentation"
     }
 
     fn check(&self, context: &LintContext) -> Vec<LintProblem> {
+        ConfiguredIndentation {
+            rule: Self {
+                spaces: self.spaces,
+            },
+            sequences: IndentSequences::Indented,
+        }
+        .check(context)
+    }
+}
+
+impl IndentationRule {
+    fn check_lines(&self, context: &LintContext) -> Vec<LintProblem> {
         let mut problems = Vec::new();
 
         // Detect indentation size if in consistent mode
@@ -190,10 +247,215 @@ impl Rule for IndentationRule {
 
         problems
     }
+}
 
-    fn default_level(&self) -> RuleLevel {
-        RuleLevel::Error
+fn check_sequences(
+    context: &LintContext,
+    tokens: &[Token],
+    fixed: Option<usize>,
+    mut policy: IndentSequences,
+    problems: &mut Vec<LintProblem>,
+) {
+    use IndentSequences::*;
+
+    let mut collections = Vec::new();
+    let mut step = fixed;
+    for (index, Token(mark, token)) in tokens.iter().enumerate() {
+        match token {
+            BlockMappingStart => collections.push(Some(mark.col())),
+            FlowMappingStart | FlowSequenceStart | BlockSequenceStart => collections.push(None),
+            BlockEnd | FlowMappingEnd | FlowSequenceEnd => {
+                collections.pop();
+            }
+            Key => {
+                if let Some(Some(column)) = collections.last_mut() {
+                    *column = mark.col();
+                }
+            }
+            Value => {
+                let Some(&Some(mapping_column)) = collections.last() else {
+                    continue;
+                };
+                let Some(Token(sequence, sequence_token)) = tokens[index + 1..]
+                    .iter()
+                    .find(|Token(_, token)| !matches!(token, Anchor(_) | Tag(..)))
+                else {
+                    continue;
+                };
+                if sequence.line() <= mark.line()
+                    || !matches!(sequence_token, BlockSequenceStart | BlockEntry)
+                {
+                    continue;
+                }
+                // A start token points at the dash. For an indentless sequence
+                // yaml-rust2 emits only a BlockEntry, whose marker follows it.
+                let mut column = sequence.col();
+                if matches!(sequence_token, BlockEntry) {
+                    let Some(line) = context.lines.get(sequence.line() - 1) else {
+                        continue;
+                    };
+                    column = line.bytes().take_while(|&byte| byte == b' ').count();
+                }
+                let indented = column > mapping_column;
+                if policy == Consistent {
+                    policy = if indented { Indented } else { Unindented };
+                }
+                let expected = match (policy, fixed, indented) {
+                    (Unindented, _, true) => Some(mapping_column),
+                    (Indented, Some(spaces), _) | (Whatever, Some(spaces), true) => {
+                        Some(mapping_column.saturating_add(spaces))
+                    }
+                    _ => None,
+                };
+                let message =
+                    if let Some(expected) = expected.filter(|&expected| expected != column) {
+                        format!("wrong indentation: expected {expected} but found {column}")
+                    } else if policy == Indented && !indented && fixed.is_none() {
+                        format!(
+                            "wrong indentation: expected at least {}",
+                            mapping_column + 1
+                        )
+                    } else {
+                        continue;
+                    };
+                problems.push(LintProblem::new(
+                    sequence.line(),
+                    column + 1,
+                    message,
+                    "indentation",
+                    LintLevel::Error,
+                ));
+            }
+            BlockEntry => {
+                let Some(Token(child, kind)) = tokens.get(index + 1) else {
+                    continue;
+                };
+                let (mut child, mut kind) = (*child, kind);
+                if matches!(kind, BlockMappingStart)
+                    && let Some(Token(key, key_kind @ Key)) = tokens.get(index + 2)
+                {
+                    child = *key;
+                    kind = key_kind;
+                }
+                if child.line() <= mark.line()
+                    || matches!(
+                        kind,
+                        BlockEnd
+                            | BlockEntry
+                            | DocumentEnd
+                            | DocumentStart
+                            | StreamEnd
+                            | Scalar(TScalarStyle::Literal | TScalarStyle::Folded, _)
+                    )
+                {
+                    continue;
+                }
+                let Some(line) = context.lines.get(mark.line() - 1) else {
+                    continue;
+                };
+                let before_entry: String = line.chars().take(mark.col()).collect();
+                let before_dash = before_entry.trim_end_matches([' ', '\t']);
+                let Some(prefix) = before_dash.strip_suffix('-') else {
+                    continue;
+                };
+                let column = prefix.chars().count();
+                if child.col() > column {
+                    let expected = column.saturating_add(*step.get_or_insert(child.col() - column));
+                    if child.col() != expected {
+                        problems.push(LintProblem::new(
+                            child.line(),
+                            child.col() + 1,
+                            format!(
+                                "wrong indentation: expected {expected} but found {}",
+                                child.col()
+                            ),
+                            "indentation",
+                            LintLevel::Error,
+                        ));
+                    }
+                }
+            }
+            _ => {}
+        }
     }
+}
+
+struct FlowIndent {
+    opening_line: usize,
+    opening_indent: usize,
+    content_indent: Option<usize>,
+}
+
+fn check_flows(
+    context: &LintContext,
+    tokens: &[Token],
+    fixed: Option<usize>,
+    problems: &mut Vec<LintProblem>,
+) -> HashSet<usize> {
+    let mut flows: Vec<Option<FlowIndent>> = Vec::new();
+    let mut checked_lines = HashSet::new();
+    let mut last_line = 0;
+    for Token(mark, token) in tokens {
+        if matches!(token, StreamStart(_) | StreamEnd | BlockEnd) {
+            continue;
+        }
+        let line = mark.line();
+        let source = context.lines.get(line - 1);
+        if matches!(token, FlowMappingStart)
+            && source.and_then(|line| line.chars().nth(mark.col())) != Some('{')
+        {
+            // The scanner represents an implicit key/value pair in a flow
+            // sequence as a mapping with no delimiters in the source.
+            flows.push(None);
+            continue;
+        }
+        let closing = matches!(token, FlowSequenceEnd | FlowMappingEnd);
+        if matches!(token, FlowMappingEnd) && matches!(flows.last(), Some(None)) {
+            flows.pop();
+            continue;
+        }
+        if let Some(flow) = flows.iter_mut().rev().find_map(Option::as_mut) {
+            if line > last_line {
+                let expected = if closing {
+                    flow.opening_indent
+                } else {
+                    *flow.content_indent.get_or_insert_with(|| {
+                        fixed.map_or(mark.col(), |spaces| {
+                            flow.opening_indent.saturating_add(spaces)
+                        })
+                    })
+                };
+                checked_lines.insert(line);
+                if mark.col() != expected {
+                    problems.push(LintProblem::new(
+                        line,
+                        mark.col() + 1,
+                        format!(
+                            "wrong indentation: expected {expected} but found {}",
+                            mark.col()
+                        ),
+                        "indentation",
+                        LintLevel::Error,
+                    ));
+                }
+            } else if line == flow.opening_line && !closing {
+                flow.content_indent.get_or_insert(mark.col());
+            }
+        }
+        if closing {
+            flows.pop();
+        } else if matches!(token, FlowSequenceStart | FlowMappingStart)
+            && let Some(source) = source
+        {
+            flows.push(Some(FlowIndent {
+                opening_line: line,
+                opening_indent: source.bytes().take_while(|&byte| byte == b' ').count(),
+                content_indent: None,
+            }));
+        }
+        last_line = last_line.max(line);
+    }
+    checked_lines
 }
 
 /// Detect the indentation size used in the document
