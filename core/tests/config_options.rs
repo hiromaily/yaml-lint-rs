@@ -32,6 +32,72 @@ rules:
 }
 
 #[test]
+fn line_length_can_allow_long_words_and_mapping_values() {
+    let source = "- key: https://example.com/long\n- https://example.com/long\n";
+    let config = Config::load_from_str("rules: {line-length: {max: 20}}").unwrap();
+    let problems = Linter::new(config).lint_string(source).unwrap();
+    assert_eq!(problems.len(), 1);
+    assert_eq!((problems[0].line, problems[0].column), (1, 21));
+
+    let config = Config::load_from_str(
+        "rules: {line-length: {max: 20, allow-non-breakable-inline-mappings: true}}",
+    )
+    .unwrap();
+    assert!(Linter::new(config).lint_string(source).unwrap().is_empty());
+}
+
+#[test]
+fn file_extends_inherits_options_and_decodes_ignore_file() {
+    let directory =
+        std::env::temp_dir().join(format!("yaml-lint-config-test-{}", std::process::id()));
+    std::fs::create_dir(&directory).unwrap();
+    let base = directory.join("base.yaml");
+    let ignore = directory.join("ignored.txt");
+    let child = directory.join("child.yaml");
+    std::fs::write(
+        &ignore,
+        "*.generated.yaml\n"
+            .chars()
+            .flat_map(|ch| u32::from(ch).to_be_bytes())
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    std::fs::write(
+        &base,
+        format!(
+            "ignore-from-file: '{}'\nrules: {{line-length: {{max: 5, level: warning}}}}\n",
+            ignore.display()
+        ),
+    )
+    .unwrap();
+    let settings = format!(
+        "extends: '{}'\nrules: {{line-length: {{allow-non-breakable-words: false}}}}\n",
+        base.display()
+    );
+    std::fs::write(&child, &settings).unwrap();
+    let loaded = Config::load_from_file(&child);
+    std::fs::write(&base, format!("extends: '{}'\n", child.display())).unwrap();
+    let cycle = Config::load_from_file(&child);
+    std::fs::remove_file(base).unwrap();
+    std::fs::remove_file(ignore).unwrap();
+    std::fs::remove_file(child).unwrap();
+    std::fs::remove_dir(directory).unwrap();
+
+    let config = loaded.unwrap();
+    assert_eq!(config.ignore, ["*.generated.yaml"]);
+    let problems = Linter::new(config).lint_string("abcdef\n").unwrap();
+    assert_eq!(problems.len(), 1);
+    assert_eq!(problems[0].column, 6);
+    assert_eq!(problems[0].level, yaml_lint_core::LintLevel::Warning);
+    assert!(
+        cycle
+            .unwrap_err()
+            .to_string()
+            .contains("Circular config inheritance")
+    );
+}
+
+#[test]
 fn test_indentation_fixed_spaces() {
     let config_yaml = r#"
 rules:

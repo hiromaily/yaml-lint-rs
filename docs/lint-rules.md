@@ -30,13 +30,15 @@ key: value
 **Configurable**: Yes
 **Fixable**: ❌ No (requires semantic understanding)
 
-Enforces a maximum line length.
+Enforces a maximum line length in Unicode characters.
 
 **Configuration**:
 ```yaml
 rules:
   line-length:
-    max: 80  # Default: 80
+    max: 80
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: false
 ```
 
 **Why it matters**: Long lines are harder to read and may cause horizontal scrolling.
@@ -89,12 +91,13 @@ key: value
 ### colons
 
 **Level**: Error (default)
-**Configurable**: Yes (future)
+**Configurable**: Yes
 **Fixable**: ❌ No (planned)
 
 Validates spacing around colons in key-value mappings.
 
-**Default**: 0 spaces before colon, 1 space after colon
+`max-spaces-before` defaults to 0 and `max-spaces-after` defaults to 1. Set either
+option to -1 to disable its limit.
 
 **Why it matters**: Consistent spacing improves readability.
 
@@ -224,7 +227,8 @@ key: value
 **Configurable**: Yes
 **Fixable**: ✅ Yes
 
-Limits consecutive empty lines in YAML files.
+Limits consecutive empty lines in YAML files and reports the last line of each
+excess run. The `trailing-spaces` rule handles whitespace on otherwise empty lines.
 
 **Configuration**:
 ```yaml
@@ -253,7 +257,6 @@ key1: value1
 key2: value2  # 1 empty line - ok
 ```
 
-**Note**: Lines containing only whitespace are considered empty.
 
 ### hyphens
 
@@ -261,7 +264,8 @@ key2: value2  # 1 empty line - ok
 **Configurable**: Yes
 **Fixable**: ❌ No (planned)
 
-Controls spacing after list item hyphens in YAML sequences.
+Controls spacing after list item hyphens in YAML sequences. Set
+`max-spaces-after` to -1 to disable the limit.
 
 **Configuration**:
 ```yaml
@@ -290,7 +294,7 @@ list:
 
 ### comments
 
-**Level**: Error (default)
+**Level**: Warning (default)
 **Configurable**: Yes
 **Fixable**: ✅ Yes
 
@@ -301,8 +305,8 @@ Enforces consistent comment formatting in YAML files.
 rules:
   comments:
     require-starting-space: true    # Require space after # (default: true)
-    ignore-shebangs: true           # Ignore shebang lines (default: true)
-    min-spaces-from-content: 2      # Minimum spaces before inline comment (default: 2)
+    ignore-shebangs: true           # Ignore a shebang on the first line (default: true)
+    min-spaces-from-content: 2      # Minimum spaces before inline comment (-1 disables this check)
 ```
 
 **Why it matters**: Consistent comment formatting improves readability.
@@ -312,7 +316,7 @@ rules:
 ```yaml
 # Bad
 #This comment has no space after #
-key: value# Inline comment too close
+key: value # Inline comment too close
 
 # Good
 # This comment has proper spacing
@@ -461,7 +465,7 @@ Each rule can be configured with one of three levels:
 
 ### new-lines
 
-Enforces a line ending style throughout the YAML source. The default preset reports
+Checks the first line ending in the YAML source. The default preset reports
 mismatches as errors, and the relaxed preset reports them as warnings.
 
 | `type` | Expected line ending |
@@ -486,7 +490,7 @@ the style configured by `new-lines` when that rule is enabled.
 Most enabled rules are errors. The exceptions and disabled rules are:
 
 - `document-start`: disabled
-- `truthy` and `comments-indentation`: warning
+- `comments`, `truthy`, and `comments-indentation`: warning
 - `document-end`, `empty-values`, `float-values`, `key-ordering`, `octal-values`, and `quoted-strings`: disabled
 
 Suitable for production code.

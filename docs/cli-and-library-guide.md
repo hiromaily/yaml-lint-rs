@@ -108,8 +108,8 @@ yaml-lint-rs looks for configuration in these locations (in order):
 ### Config File Format
 
 ```yaml
-# Extend a preset
-extends: default  # or "relaxed"
+# Extend a preset or a config file
+extends: default  # "relaxed" and paths such as "./lint/base.yaml" also work
 
 # Configure rules
 rules:
@@ -152,7 +152,9 @@ rules:
 Both the top-level configuration and individual rules also accept
 `ignore-from-file` as a filename or a list of filenames. Paths are relative to
 the working directory. Each UTF-8 file supplies one pattern per line. Use
-either `ignore` or `ignore-from-file` at a given level.
+either `ignore` or `ignore-from-file` at a given level. Config and ignore files
+can use UTF-8, UTF-16, or UTF-32. Relative paths in `extends` are resolved from
+the working directory.
 
 Rule-level ignores apply to CLI linting and fixing, as well as to the library
 when using `lint_file`, `lint_string_with_path`, or `Fixer::fix` with a file

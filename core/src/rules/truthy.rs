@@ -61,13 +61,16 @@ impl Rule for TruthyRule {
                         && values.contains(&value.as_str())
                         && !self.allowed_values.contains(value) =>
                 {
+                    let mut allowed = self
+                        .allowed_values
+                        .iter()
+                        .map(String::as_str)
+                        .collect::<Vec<_>>();
+                    allowed.sort_unstable();
                     problems.push(tokens::problem(
                         mark,
                         self.name(),
-                        format!(
-                            "truthy value should be one of [{}]",
-                            self.allowed_values.join(", ")
-                        ),
+                        format!("truthy value should be one of [{}]", allowed.join(", ")),
                     ));
                 }
                 _ => {}

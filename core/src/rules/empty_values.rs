@@ -78,7 +78,9 @@ impl Rule for EmptyValuesRule {
             };
             if let Some(message) = message {
                 let mut diagnostic = problem(*mark, self.name(), message);
-                diagnostic.column += 1;
+                if matches!(token, Value) {
+                    diagnostic.column += 1;
+                }
                 problems.push(diagnostic);
             }
         }

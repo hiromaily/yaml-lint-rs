@@ -256,7 +256,7 @@ ignore: |
    - Options: `max-spaces-after` (default: 1)
 
 10. **comments** - Enforces consistent comment formatting
-    - Level: Error
+    - Level: Warning
     - Options: `require-starting-space`, `min-spaces-from-content`
 
 11. **truthy** - Restricts boolean representations (YAML 1.1 vs 1.2)

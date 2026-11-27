@@ -1,5 +1,6 @@
 use crate::{LintLevel, LintProblem};
 use yaml_rust2::parser::{Event, Parser};
+use yaml_rust2::scanner::{Marker, Scanner, Token, TokenType};
 
 pub(crate) fn check(content: &str, problems: &mut Vec<LintProblem>) {
     let mut parser = Parser::new_from_str(content);
@@ -24,6 +25,7 @@ pub(crate) fn check(content: &str, problems: &mut Vec<LintProblem>) {
                                 error.info()
                             }
                         });
+                let message = compatible_message(content, *mark, message);
                 problems.retain(|problem| (problem.line, problem.column) != position);
                 problems.push(LintProblem::new(
                     position.0,
@@ -37,6 +39,32 @@ pub(crate) fn check(content: &str, problems: &mut Vec<LintProblem>) {
             }
         }
     }
+}
+
+fn compatible_message(content: &str, mark: Marker, message: &str) -> String {
+    let expected = match message {
+        "mapping values are not allowed in this context" => {
+            return "mapping values are not allowed here".into();
+        }
+        "did not find expected <document start>" => "'<document start>'",
+        "did not find expected node content" => "the node content",
+        _ => return message.into(),
+    };
+    let found = Scanner::new(content.chars())
+        .take_while(|Token(position, _)| position.index() <= mark.index())
+        .filter(|Token(position, _)| position.index() == mark.index())
+        .find_map(|Token(_, token)| match token {
+            TokenType::Scalar(..) => Some("<scalar>"),
+            TokenType::DocumentEnd => Some("<document end>"),
+            TokenType::FlowSequenceEnd => Some("]"),
+            TokenType::FlowMappingEnd => Some("}"),
+            TokenType::StreamEnd => Some("<stream end>"),
+            _ => None,
+        });
+    found.map_or_else(
+        || message.into(),
+        |found| format!("expected {expected}, but found '{found}'"),
+    )
 }
 
 #[cfg(test)]

@@ -37,11 +37,6 @@ impl EmptyLinesRule {
             max_end,
         }
     }
-
-    /// Check if a line is empty (only whitespace)
-    fn is_empty_line(line: &str) -> bool {
-        line.trim().is_empty()
-    }
 }
 
 impl Default for EmptyLinesRule {
@@ -57,95 +52,40 @@ impl Rule for EmptyLinesRule {
 
     fn check(&self, context: &LintContext) -> Vec<LintProblem> {
         let mut problems = Vec::new();
-
-        if context.lines.is_empty() {
-            return problems;
-        }
-
-        // Check empty lines at start of file
-        let mut start_empty_count = 0;
-        for line in &context.lines {
-            if Self::is_empty_line(line) {
-                start_empty_count += 1;
+        let mut lines = context.content.split_inclusive('\n').peekable();
+        let mut line_number = 0;
+        while let Some(chunk) = lines.next() {
+            line_number += 1;
+            if !matches!(chunk, "\n" | "\r\n") {
+                continue;
+            }
+            let first_line = line_number;
+            let mut run = 1;
+            while lines
+                .peek()
+                .is_some_and(|next| matches!(*next, "\n" | "\r\n"))
+            {
+                lines.next();
+                line_number += 1;
+                run += 1;
+            }
+            let limit = if lines.peek().is_none() {
+                self.max_end
+            } else if first_line == 1 {
+                self.max_start
             } else {
-                break;
+                self.max
+            };
+            if run > limit && !matches!(context.content.as_str(), "\n" | "\r\n") {
+                problems.push(LintProblem::new(
+                    line_number,
+                    1,
+                    format!("too many blank lines ({run} > {limit})"),
+                    self.name(),
+                    LintLevel::Error,
+                ));
             }
         }
-
-        if start_empty_count > self.max_start {
-            problems.push(LintProblem::new(
-                1,
-                1,
-                format!(
-                    "too many blank lines at start of file ({} > {})",
-                    start_empty_count, self.max_start
-                ),
-                self.name(),
-                LintLevel::Error,
-            ));
-        }
-
-        // If entire file is empty lines, don't report as end-of-file error too
-        if start_empty_count == context.lines.len() {
-            return problems;
-        }
-
-        // Check empty lines at end of file
-        let mut end_empty_count = 0;
-        for line in context.lines.iter().rev() {
-            if Self::is_empty_line(line) {
-                end_empty_count += 1;
-            } else {
-                break;
-            }
-        }
-
-        if end_empty_count > self.max_end {
-            let line_num = context.lines.len() - end_empty_count + 1;
-            problems.push(LintProblem::new(
-                line_num,
-                1,
-                format!(
-                    "too many blank lines at end of file ({} > {})",
-                    end_empty_count, self.max_end
-                ),
-                self.name(),
-                LintLevel::Error,
-            ));
-        }
-
-        // Check consecutive empty lines in the middle
-        let mut consecutive_empty = 0;
-        let mut empty_block_start = 0;
-
-        for (idx, line) in context.lines.iter().enumerate() {
-            if Self::is_empty_line(line) {
-                if consecutive_empty == 0 {
-                    empty_block_start = idx + 1; // 1-indexed
-                }
-                consecutive_empty += 1;
-            } else {
-                if consecutive_empty > self.max {
-                    // Don't report if this is the start of file (already reported)
-                    let is_at_start = empty_block_start == 1;
-
-                    if !is_at_start {
-                        problems.push(LintProblem::new(
-                            empty_block_start,
-                            1,
-                            format!(
-                                "too many blank lines ({} > {})",
-                                consecutive_empty, self.max
-                            ),
-                            self.name(),
-                            LintLevel::Error,
-                        ));
-                    }
-                }
-                consecutive_empty = 0;
-            }
-        }
-
         problems
     }
 
@@ -159,7 +99,7 @@ impl Rule for EmptyLinesRule {
 
     fn fix(&self, content: &str, _problem: &LintProblem) -> Option<String> {
         let lines: Vec<&str> = content.split_inclusive('\n').collect();
-        if lines.is_empty() {
+        if lines.is_empty() || matches!(content, "\n" | "\r\n") {
             return None;
         }
 
@@ -176,16 +116,23 @@ impl Rule for EmptyLinesRule {
         let mut result = String::with_capacity(content.len());
         let skip_until = lines
             .iter()
-            .position(|line| !line.trim().is_empty())
+            .position(|line| !matches!(*line, "\n" | "\r\n"))
             .unwrap_or(lines.len());
-        for line in &lines[..self.max_start.min(skip_until)] {
+        let leading_limit = if skip_until == lines.len() {
+            self.max_end
+        } else {
+            self.max_start
+        };
+        for line in &lines[..leading_limit.min(skip_until)] {
             result.push_str(split_ending(line).1);
         }
 
         // Keep a standalone directive attached to its original line when
         // shortening a blank run, even if the configured limit is zero.
         let keep_blank_lines = |result: &mut String, start: usize, count: usize, limit: usize| {
-            let (original, kept) = if suppressed.contains(&(start + 1)) {
+            let (original, kept) = if suppressed.contains(&(start + 1))
+                || suppressed.contains(&(start + count))
+            {
                 (count, count)
             } else {
                 let original = usize::from(count > 0 && standalone_targets.contains(&(start + 1)));
@@ -200,10 +147,12 @@ impl Rule for EmptyLinesRule {
         };
 
         // Process middle content
-        let last_content = lines.iter().rposition(|line| !line.trim().is_empty());
+        let last_content = lines
+            .iter()
+            .rposition(|line| !matches!(*line, "\n" | "\r\n"));
         let mut consecutive_empty = 0;
         for (idx, line) in lines.iter().enumerate().skip(skip_until) {
-            if line.trim().is_empty() {
+            if matches!(*line, "\n" | "\r\n") {
                 consecutive_empty += 1;
                 // Don't add yet, wait until we know how many to add
             } else {
@@ -280,7 +229,7 @@ mod tests {
         let problems = rule.check(&context);
 
         assert_eq!(problems.len(), 1);
-        assert!(problems[0].message.contains("at start of file"));
+        assert!(problems[0].message.contains("too many blank lines (1 > 0)"));
     }
 
     #[test]
@@ -291,7 +240,7 @@ mod tests {
         let problems = rule.check(&context);
 
         assert_eq!(problems.len(), 1);
-        assert!(problems[0].message.contains("at end of file"));
+        assert!(problems[0].message.contains("too many blank lines (1 > 0)"));
     }
 
     #[test]
@@ -313,7 +262,7 @@ mod tests {
         let problems = rule.check(&context);
 
         assert_eq!(problems.len(), 1);
-        assert!(problems[0].message.contains("at start of file (2 > 1)"));
+        assert!(problems[0].message.contains("too many blank lines (2 > 1)"));
     }
 
     #[test]
@@ -324,7 +273,7 @@ mod tests {
         let problems = rule.check(&context);
 
         assert_eq!(problems.len(), 1);
-        assert!(problems[0].message.contains("at end of file (2 > 1)"));
+        assert!(problems[0].message.contains("too many blank lines (2 > 1)"));
     }
 
     #[test]
@@ -338,14 +287,13 @@ mod tests {
     }
 
     #[test]
-    fn test_whitespace_only_lines_count_as_empty() {
+    fn test_whitespace_only_lines_are_not_empty() {
         let yaml = "key1: value1\n   \n   \n   \nkey2: value2\n";
         let context = LintContext::new(yaml.to_string());
         let rule = EmptyLinesRule::new();
         let problems = rule.check(&context);
 
-        assert_eq!(problems.len(), 1);
-        assert!(problems[0].message.contains("too many blank lines (3 > 2)"));
+        assert!(problems.is_empty());
     }
 
     #[test]
@@ -361,14 +309,10 @@ mod tests {
 
     #[test]
     fn test_all_empty_lines_file() {
-        // File with only empty lines should only report start error, not both start and end
-        let yaml = "\n\n\n";
-        let context = LintContext::new(yaml.to_string());
-        let rule = EmptyLinesRule::new();
-        let problems = rule.check(&context);
-
-        // Should only report start error (3 > 0), not end error too
+        let context = LintContext::new("\n\n\n".into());
+        let problems = EmptyLinesRule::new().check(&context);
         assert_eq!(problems.len(), 1);
-        assert!(problems[0].message.contains("at start of file"));
+        assert_eq!(problems[0].line, 3);
+        assert_eq!(problems[0].message, "too many blank lines (3 > 0)");
     }
 }

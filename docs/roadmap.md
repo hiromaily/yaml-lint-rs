@@ -14,6 +14,8 @@
   - [x] Support `yaml-files`, rule-level ignores, and `ignore-from-file`
   - [x] Report YAML syntax errors as diagnostics during linting and fixing
   - [x] [Audit all 23 rules against yamllint v1.38.0 fixtures](yamllint-compatibility.md)
-  - [ ] Resolve remaining differences in rule options, diagnostic positions and messages, and parser behavior
+  - [x] Support config-file inheritance and UTF-16/UTF-32 config and ignore files
+  - [x] Match audited diagnostics for empty lines, empty values, line length, line endings, duplicate keys, and quoted strings
+  - [ ] Resolve remaining differences in indentation, parser behavior, locale-sensitive ordering, and presets
 - [x] Phase 4: Performance optimizations, parallel linting
 - [ ] Phase 5: Editor integration (LSP?)
