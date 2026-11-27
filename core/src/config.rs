@@ -814,7 +814,15 @@ impl Config {
             {
                 for (rule, settings) in std::mem::take(overrides) {
                     match (inherited.get_mut(&rule), settings) {
-                        (Some(Value::Mapping(_)), Value::String(level)) if level == "enable" => {}
+                        (Some(Value::String(base)), Value::String(level))
+                            if base == "disable" && level == "enable" =>
+                        {
+                            *base = "error".into();
+                        }
+                        (Some(base), Value::String(level))
+                            if level == "enable"
+                                && (base.is_mapping()
+                                    || matches!(base.as_str(), Some("warning" | "error"))) => {}
                         (Some(Value::Mapping(base)), Value::Mapping(settings)) => {
                             if settings.contains_key("ignore")
                                 || settings.contains_key("ignore-from-file")

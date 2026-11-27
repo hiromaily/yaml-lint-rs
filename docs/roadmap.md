@@ -20,6 +20,6 @@
   - [x] Support multiline string indentation checks and match the locale-sensitive ordering fixtures
   - [x] Match the default and relaxed presets
   - [x] Infer consistent indentation from block structure and apply it to later values
-  - [ ] Resolve remaining differences in indentation and parser behavior
+  - [ ] Resolve remaining differences in indentation and parser behavior ([implementation plan](superpowers/plans/2026-11-27-phase-3-completion.md))
 - [x] Phase 4: Performance optimizations, parallel linting
 - [ ] Phase 5: Editor integration (LSP?)

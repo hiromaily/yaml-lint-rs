@@ -3,6 +3,22 @@
 use yaml_lint_core::{Config, Linter};
 
 #[test]
+fn enabling_an_inherited_rule_preserves_its_level() {
+    let config =
+        Config::load_from_str("extends: relaxed\nrules: {colons: enable, comments: enable}")
+            .unwrap();
+    let problems = Linter::new(config)
+        .lint_string("key:  value  #comment\n")
+        .unwrap();
+    let actual: Vec<_> = problems
+        .iter()
+        .map(|p| (p.rule.as_str(), p.level))
+        .collect();
+    use yaml_lint_core::LintLevel::{Error, Warning};
+    assert_eq!(actual, [("colons", Warning), ("comments", Error)]);
+}
+
+#[test]
 fn relaxed_preset_options_survive_partial_rule_overrides() {
     let config = Config::load_from_str(
         "extends: relaxed\nrules:\n  braces: enable\n  brackets: {level: error}\n  line-length: {max: 20}\n",
