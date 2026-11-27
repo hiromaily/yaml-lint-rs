@@ -9,3 +9,5 @@ Local scanner changes
 
 - Allow outdented closing flow delimiters to reach the parser, which
   checks that the delimiter matches the open collection.
+- End alias keys before a mapping separator using the scanner's existing
+  separator rules.

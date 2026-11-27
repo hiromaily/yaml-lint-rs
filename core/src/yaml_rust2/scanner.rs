@@ -712,12 +712,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             ',' => self.fetch_flow_entry(),
             '-' if is_blank_or_breakz(nc) => self.fetch_block_entry(),
             '?' if is_blank_or_breakz(nc) => self.fetch_key(),
-            ':' if is_blank_or_breakz(nc)
-                || (self.flow_level > 0
-                    && (is_flow(nc) || self.mark.index == self.adjacent_value_allowed_at)) =>
-            {
-                self.fetch_value()
-            }
+            ':' if self.is_value_indicator(nc) => self.fetch_value(),
             // Is it an alias?
             '*' => self.fetch_anchor(true),
             // Is it an anchor?
@@ -740,6 +735,12 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             )),
             _ => self.fetch_plain_scalar(),
         }
+    }
+
+    fn is_value_indicator(&self, next: char) -> bool {
+        is_blank_or_breakz(next)
+            || (self.flow_level > 0
+                && (is_flow(next) || self.mark.index == self.adjacent_value_allowed_at))
     }
 
     /// Return the next token in the stream.
@@ -1379,6 +1380,12 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         self.skip_non_blank();
         while is_anchor_char(self.look_ch()) {
+            if alias && self.ch() == ':' {
+                self.lookahead(2);
+                if self.is_value_indicator(self.buffer[1]) {
+                    break;
+                }
+            }
             string.push(self.ch());
             self.skip_non_blank();
         }

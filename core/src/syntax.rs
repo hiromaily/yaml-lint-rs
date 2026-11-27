@@ -72,6 +72,32 @@ mod tests {
     use crate::{Config, Fixer, LintLevel, Linter};
 
     #[test]
+    fn recognizes_alias_keys_immediately_followed_by_a_colon() {
+        let config =
+            Config::load_from_str("rules:\n  anchors: enable\n  colons: enable\n").unwrap();
+        let linter = Linter::new(config);
+        let source = "---\n- anchor: &a key\n- *a: 42\n- {*a: 42}\n- *a : 42\n- {*a : 42}\n- *a  : 42\n- {*a  : 42}\n";
+        let problems = linter.lint_string(source).unwrap();
+        let positions: Vec<_> = problems
+            .iter()
+            .map(|problem| (problem.line, problem.column, problem.rule.as_str()))
+            .collect();
+        assert_eq!(positions, [(7, 6, "colons"), (8, 7, "colons")]);
+
+        let source = "- &a:b value\n- *a:b\n- *missing: 42\n";
+        let problems = linter.lint_string(source).unwrap();
+        assert_eq!(problems.len(), 1);
+        assert_eq!(
+            (
+                problems[0].line,
+                problems[0].column,
+                problems[0].rule.as_str()
+            ),
+            (3, 3, "anchors")
+        );
+    }
+
+    #[test]
     fn outdented_flow_closers_reach_the_lint_and_fix_rules() {
         let config = Config::load_from_str("rules:\n  indentation: enable\n").unwrap();
         let registry = config.create_registry();
