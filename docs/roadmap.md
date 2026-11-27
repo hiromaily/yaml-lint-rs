@@ -5,7 +5,7 @@
   - [x] JSON diagnostics output
   - [x] Line-level comment directives
   - [x] Additional lint rules (`braces`, `brackets`, `new-lines`)
-- [ ] Phase 3: Full yamllint parity (23 rules)
+- [x] Phase 3: yamllint v1.38.0 fixture parity (23 rules)
   - [x] Implement and register all 23 yamllint rule names
   - [x] Support locale-aware key ordering on Linux and macOS
   - [x] Support PCRE2 in rule pattern options
@@ -20,6 +20,6 @@
   - [x] Support multiline string indentation checks and match the locale-sensitive ordering fixtures
   - [x] Match the default and relaxed presets
   - [x] Infer consistent indentation from block structure and apply it to later values
-  - [ ] Resolve remaining differences in indentation and parser behavior ([implementation plan](superpowers/plans/2026-11-27-phase-3-completion.md))
+  - [x] Resolve remaining differences in indentation and parser behavior ([implementation plan](superpowers/plans/2026-11-27-phase-3-completion.md))
 - [x] Phase 4: Performance optimizations, parallel linting
 - [ ] Phase 5: Editor integration (LSP?)
