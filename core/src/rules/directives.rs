@@ -94,7 +94,9 @@ pub(super) fn non_comment_ranges(content: &str) -> Option<Vec<Range<usize>>> {
     });
     let char_count = offsets.as_ref().map_or(content.len(), |map| map.len() - 1);
     let byte_offset = |index| offsets.as_ref().map_or(index, |map| map[index]);
-    let mut scanner = Scanner::new(content.chars());
+    // A terminal tab does not make comment boundaries ambiguous. Syntax
+    // checking still diagnoses it independently.
+    let mut scanner = Scanner::new(content.chars()).allow_terminal_tabs();
     let mut ends = Vec::new();
     scanner.fetch_next_token().ok()?; // Stream start does not consume input.
     let mut cursor = 0;

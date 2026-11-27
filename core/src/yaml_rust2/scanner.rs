@@ -406,6 +406,7 @@ pub struct Scanner<T> {
     implicit_flow_mapping: bool,
     /// End of a plain scalar whose final line is a continuation.
     plain_continuation_end: Option<usize>,
+    allow_terminal_tabs: bool,
 }
 
 impl<T: Iterator<Item = char>> Iterator for Scanner<T> {
@@ -459,7 +460,14 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             flow_mapping_started: false,
             implicit_flow_mapping: false,
             plain_continuation_end: None,
+            allow_terminal_tabs: false,
         }
+    }
+
+    /// Keep scanning after terminal tabs when collecting source ranges.
+    pub(crate) fn allow_terminal_tabs(mut self) -> Self {
+        self.allow_terminal_tabs = true;
+        self
     }
 
     /// Get a copy of the last error that was encountered, if any.
@@ -956,7 +964,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
         }
 
-        if let Some(tab) = first_tab
+        if !self.allow_terminal_tabs
+            && let Some(tab) = first_tab
             && is_breakz(self.ch())
         {
             return Err(ScanError::new(tab, TERMINAL_TAB_ERROR));
@@ -2290,7 +2299,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                         self.skip_blank();
                     }
                 } else {
-                    if let Some(tab) = first_tab {
+                    if !self.allow_terminal_tabs
+                        && let Some(tab) = first_tab
+                    {
                         return Err(ScanError::new(tab, TERMINAL_TAB_ERROR));
                     }
                     self.lookahead(2);
@@ -2304,7 +2315,8 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     }
                 }
             }
-            if let Some(tab) = first_tab
+            if !self.allow_terminal_tabs
+                && let Some(tab) = first_tab
                 && is_z(self.ch())
             {
                 return Err(ScanError::new(tab, TERMINAL_TAB_ERROR));

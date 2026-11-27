@@ -83,6 +83,23 @@ mod tests {
     use crate::{Config, Fixer, LintLevel, Linter};
 
     #[test]
+    fn keeps_line_directives_active_when_terminal_tabs_are_reported() {
+        let config = Config::load_from_str("rules:\n  trailing-spaces: enable\n").unwrap();
+        let registry = config.create_registry();
+        let linter = Linter::new(config);
+        let source = "# yamllint disable-line rule:trailing-spaces\nkeep: spaces  \nbad: tab\t\n";
+        assert_syntax(
+            &linter,
+            source,
+            (3, 9),
+            r"found character '\t' that cannot start any token",
+        );
+        let fix = Fixer::new(&registry).dry_run("tabs.yaml", source);
+        assert!(!fix.has_fixes());
+        assert_eq!(fix.unfixable_problems, linter.lint_string(source).unwrap());
+    }
+
+    #[test]
     fn reports_terminal_tabs_at_token_boundaries_in_lint_and_fix() {
         let config = Config::load_from_str("rules:\n  trailing-spaces: enable\n").unwrap();
         let registry = config.create_registry();
