@@ -84,7 +84,7 @@ pub(super) fn comments(content: &str) -> impl Iterator<Item = (usize, &str, usiz
 /// Map tokens that can contain a hash to byte ranges. The scanner discards
 /// comments, but its cursor after fetching each token gives us the token's
 /// upper bound, even when emitting a token requires looking ahead.
-fn non_comment_ranges(content: &str) -> Option<Vec<Range<usize>>> {
+pub(super) fn non_comment_ranges(content: &str) -> Option<Vec<Range<usize>>> {
     let offsets: Option<Vec<_>> = (!content.is_ascii()).then(|| {
         content
             .char_indices()

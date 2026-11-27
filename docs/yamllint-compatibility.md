@@ -22,7 +22,7 @@ run in the upstream suite without a Rust CLI comparison.
 | `anchors` | 8 | 8 | 8 | 8 |
 | `braces` | 74 | 72 | 72 | 72 |
 | `brackets` | 71 | 69 | 69 | 69 |
-| `colons` | 39 | 39 | 36 | 36 |
+| `colons` | 39 | 39 | 38 | 38 |
 | `commas` | 36 | 36 | 36 | 36 |
 | `comments` | 24 | 24 | 23 | 23 |
 | `comments-indentation` | 24 | 24 | 24 | 24 |
@@ -32,9 +32,9 @@ run in the upstream suite without a Rust CLI comparison.
 | `empty-values` | 62 | 62 | 62 | 62 |
 | `float-values` | 5 | 5 | 5 | 5 |
 | `hyphens` | 20 | 20 | 20 | 20 |
-| `indentation` | 270 | 163 | 162 | 160 |
+| `indentation` | 270 | 222 | 221 | 219 |
 | `key-duplicates` | 33 | 33 | 33 | 33 |
-| `key-ordering` | 21 | 17 | 17 | 17 |
+| `key-ordering` | 21 | 21 | 21 | 21 |
 | `line-length` | 50 | 50 | 50 | 50 |
 | `new-line-at-end-of-file` | 9 | 9 | 9 | 9 |
 | `new-lines` | 30 | 30 | 30 | 30 |
@@ -43,7 +43,7 @@ run in the upstream suite without a Rust CLI comparison.
 | `syntax` | 10 | 9 | 9 | 9 |
 | `trailing-spaces` | 12 | 10 | 10 | 10 |
 | `truthy` | 18 | 18 | 18 | 18 |
-| **Total** | 992 | 873 | 868 | 861 |
+| **Total** | 992 | 936 | 933 | 926 |
 
 Location comparisons include diagnostic rule IDs. The target column considers
 only the rule named by the fixture group. The other columns compare all
@@ -55,9 +55,8 @@ and had zero CLI config or file errors for the compared fixtures.
 - The YAML scanner rejects some multiline empty flow collections whose closing
   delimiter is at column one. It also differs on aliases adjacent to a colon
   and on tabs outside quoted scalars.
-- The four `key-ordering` differences come from locale-sensitive cases in the
-  macOS run.
+- The audit forwards the collation locale selected by the upstream key-ordering
+  fixtures to the Rust CLI.
 - The built-in presets still differ from upstream. The default preset keeps
   `document-start` disabled, and the relaxed preset enables a different set of
-  warnings. Some rule options, including sequence and multiline string
-  indentation controls, are still pending.
+  warnings.

@@ -157,6 +157,36 @@ fn flow_indentation_checks_values_and_closing_delimiters() {
 }
 
 #[test]
+fn multiline_string_indentation_preserves_scalar_content_boundaries() {
+    let source = concat!(
+        "plain: 日本語\n",
+        "  continuation\n",
+        "quoted: \"start\n",
+        "  continuation\"\n",
+        "literal: |\n",
+        "  regular\n",
+        "   extra space\n",
+        "folded: >\n",
+        "  regular\n",
+        "   extra space\n",
+        "next: value\n",
+    );
+    let config = Config::load_from_str("rules: {indentation: {spaces: 2}}").unwrap();
+    assert!(Linter::new(config).lint_string(source).unwrap().is_empty());
+
+    let config =
+        Config::load_from_str("rules: {indentation: {spaces: 2, check-multi-line-strings: true}}")
+            .unwrap();
+    let problems = Linter::new(config).lint_string(source).unwrap();
+    let positions: Vec<_> = problems.iter().map(|p| (p.line, p.column)).collect();
+    assert_eq!(positions, [(2, 3), (4, 3), (7, 4), (10, 4)]);
+    assert!(problems.iter().all(|p| p.rule == "indentation"));
+    assert!(
+        Config::load_from_str("rules: {indentation: {check-multi-line-strings: invalid}}").is_err()
+    );
+}
+
+#[test]
 fn test_indentation_fixed_spaces() {
     let config_yaml = r#"
 rules:

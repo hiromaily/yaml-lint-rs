@@ -1,6 +1,6 @@
 //! Indentation rule - validates consistent indentation
 
-use super::tokens::scan;
+use super::{directives::non_comment_ranges, tokens::scan};
 use crate::problem::{LintLevel, LintProblem};
 use crate::rules::{LintContext, Rule};
 use std::collections::HashSet;
@@ -68,6 +68,7 @@ pub enum IndentSequences {
 pub(crate) struct ConfiguredIndentation {
     pub(crate) rule: IndentationRule,
     pub(crate) sequences: IndentSequences,
+    pub(crate) check_multi_line_strings: bool,
 }
 
 impl Rule for ConfiguredIndentation {
@@ -84,7 +85,19 @@ impl Rule for ConfiguredIndentation {
         let tokens = scan(&context.content);
         let mut structural = Vec::new();
         let mut flow_lines = check_flows(context, &tokens, fixed, &mut structural);
-        check_sequences(context, &tokens, fixed, self.sequences, &mut structural);
+        check_sequences(
+            context,
+            &tokens,
+            fixed,
+            self.sequences,
+            &mut flow_lines,
+            &mut structural,
+        );
+        let (scalar_lines, scalar_problems) =
+            check_scalars(context, &tokens, fixed, self.check_multi_line_strings);
+        structural.retain(|problem| !scalar_lines.contains(&problem.line));
+        structural.extend(scalar_problems);
+        flow_lines.extend(scalar_lines);
         flow_lines.extend(structural.iter().map(|problem| problem.line));
         problems.retain(|problem| !flow_lines.contains(&problem.line));
         problems.extend(structural);
@@ -104,6 +117,7 @@ impl Rule for IndentationRule {
                 spaces: self.spaces,
             },
             sequences: IndentSequences::Indented,
+            check_multi_line_strings: false,
         }
         .check(context)
     }
@@ -249,11 +263,129 @@ impl IndentationRule {
     }
 }
 
+fn check_scalars(
+    context: &LintContext,
+    tokens: &[Token],
+    fixed: Option<usize>,
+    enabled: bool,
+) -> (HashSet<usize>, Vec<LintProblem>) {
+    use TScalarStyle::*;
+
+    let mut lines = HashSet::new();
+    let mut problems = Vec::new();
+    let source = &context.content;
+    let Some(ranges) = non_comment_ranges(source) else {
+        return (lines, problems);
+    };
+    let offsets: Option<Vec<_>> =
+        (!source.is_ascii()).then(|| source.char_indices().map(|(offset, _)| offset).collect());
+    let mut width = fixed;
+    for (index, Token(mark, token)) in tokens.iter().enumerate() {
+        let Scalar(style, value) = token else {
+            continue;
+        };
+        if value.is_empty() {
+            continue;
+        }
+        let start = if let Some(offsets) = &offsets {
+            let Some(&start) = offsets.get(mark.index()) else {
+                continue;
+            };
+            start
+        } else {
+            mark.index()
+        };
+        let Ok(range) = ranges.binary_search_by_key(&start, |range| range.start) else {
+            continue;
+        };
+        let block = matches!(style, Literal | Folded);
+        let expected = if block {
+            if enabled {
+                let base = scalar_header_indent(context, &tokens[..index], mark.line());
+                let step = width.get_or_insert(mark.col().saturating_sub(base));
+                base.saturating_add(*step)
+            } else {
+                mark.col()
+            }
+        } else {
+            mark.col() + usize::from(matches!(style, SingleQuoted | DoubleQuoted))
+        };
+
+        for (offset, line) in source[ranges[range].clone()].lines().enumerate() {
+            if (!block && offset == 0) || line.trim_matches([' ', '\t']).is_empty() {
+                continue;
+            }
+            let line_number = mark.line() + offset;
+            lines.insert(line_number);
+            let found = if offset == 0 {
+                mark.col()
+            } else {
+                line.bytes().take_while(|&byte| byte == b' ').count()
+            };
+            if enabled && found != expected {
+                problems.push(LintProblem::new(
+                    line_number,
+                    found + 1,
+                    format!("wrong indentation: expected {expected} but found {found}"),
+                    "indentation",
+                    LintLevel::Error,
+                ));
+            }
+        }
+    }
+    (lines, problems)
+}
+
+fn scalar_header_indent(context: &LintContext, preceding: &[Token], body_line: usize) -> usize {
+    let Some((index, header)) = context.lines
+        [..body_line.saturating_sub(1).min(context.lines.len())]
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(_, line)| {
+            let content = line.trim_start_matches(' ');
+            !content.is_empty() && !content.starts_with('#')
+        })
+    else {
+        return 0;
+    };
+    let line_indent = header.len() - header.trim_start_matches(' ').len();
+    let header_line = index + 1;
+    let Some(Token(mark, kind)) = preceding
+        .iter()
+        .rev()
+        .find(|Token(_, kind)| matches!(kind, Value | Key | BlockEntry))
+        .filter(|Token(mark, _)| mark.line() == header_line)
+    else {
+        return line_indent;
+    };
+    let explicit = header.chars().nth(mark.col()) == Some('?')
+        || matches!(kind, Value) && mark.col() == line_indent;
+    if explicit || matches!(kind, BlockEntry) {
+        if matches!(kind, BlockEntry) {
+            return mark.col();
+        }
+        return header
+            .chars()
+            .enumerate()
+            .skip(mark.col() + 1)
+            .find(|(_, ch)| matches!(ch, '|' | '>'))
+            .map_or(line_indent, |(column, _)| column);
+    }
+    preceding
+        .iter()
+        .rev()
+        .take_while(|Token(mark, _)| mark.line() >= header_line)
+        .find(|Token(mark, kind)| mark.line() == header_line && matches!(kind, Key))
+        .map_or(line_indent, |Token(key, _)| key.col())
+}
+
 fn check_sequences(
     context: &LintContext,
     tokens: &[Token],
     fixed: Option<usize>,
     mut policy: IndentSequences,
+    checked_lines: &mut HashSet<usize>,
     problems: &mut Vec<LintProblem>,
 ) {
     use IndentSequences::*;
@@ -262,20 +394,46 @@ fn check_sequences(
     let mut step = fixed;
     for (index, Token(mark, token)) in tokens.iter().enumerate() {
         match token {
-            BlockMappingStart => collections.push(Some(mark.col())),
+            BlockMappingStart => collections.push(Some(*mark)),
             FlowMappingStart | FlowSequenceStart | BlockSequenceStart => collections.push(None),
             BlockEnd | FlowMappingEnd | FlowSequenceEnd => {
                 collections.pop();
             }
             Key => {
                 if let Some(Some(column)) = collections.last_mut() {
-                    *column = mark.col();
+                    *column = *mark;
                 }
             }
             Value => {
-                let Some(&Some(mapping_column)) = collections.last() else {
+                let Some(&Some(key)) = collections.last() else {
                     continue;
                 };
+                let mapping_column = key.col();
+                // An explicit key can end with a colon on its own line.
+                if mark.line() > key.line()
+                    && context
+                        .lines
+                        .get(key.line() - 1)
+                        .and_then(|line| line.chars().nth(mapping_column))
+                        == Some('?')
+                    && context.lines.get(mark.line() - 1).is_some_and(|line| {
+                        line.bytes().take_while(|&byte| byte == b' ').count() == mark.col()
+                    })
+                {
+                    checked_lines.insert(mark.line());
+                    if mark.col() != mapping_column {
+                        problems.push(LintProblem::new(
+                            mark.line(),
+                            mark.col() + 1,
+                            format!(
+                                "wrong indentation: expected {mapping_column} but found {}",
+                                mark.col()
+                            ),
+                            "indentation",
+                            LintLevel::Error,
+                        ));
+                    }
+                }
                 let Some(Token(sequence, sequence_token)) = tokens[index + 1..]
                     .iter()
                     .find(|Token(_, token)| !matches!(token, Anchor(_) | Tag(..)))

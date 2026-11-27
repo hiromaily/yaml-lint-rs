@@ -74,6 +74,7 @@ pub enum RuleOptions {
     IndentationWithSequences {
         spaces: IndentConfig,
         sequences: IndentSequences,
+        check_multi_line_strings: bool,
     },
     Colons {
         max_spaces_before: usize,
@@ -382,8 +383,17 @@ impl Config {
             }
         };
 
+        let check_multi_line_strings = match map.get("check-multi-line-strings") {
+            Some(value) => value.as_bool().ok_or_else(|| {
+                crate::LintError::ConfigError(
+                    "indentation 'check-multi-line-strings' must be a boolean".into(),
+                )
+            })?,
+            None => false,
+        };
         let sequences = match map.get("indent-sequences") {
-            None => return Ok(RuleOptions::Indentation { spaces }),
+            None if !check_multi_line_strings => return Ok(RuleOptions::Indentation { spaces }),
+            None => IndentSequences::Indented,
             Some(serde_yaml::Value::Bool(true)) => IndentSequences::Indented,
             Some(serde_yaml::Value::Bool(false)) => IndentSequences::Unindented,
             Some(value) if value.as_str() == Some("whatever") => IndentSequences::Whatever,
@@ -393,7 +403,11 @@ impl Config {
                     .into(),
             )),
         };
-        Ok(RuleOptions::IndentationWithSequences { spaces, sequences })
+        Ok(RuleOptions::IndentationWithSequences {
+            spaces,
+            sequences,
+            check_multi_line_strings,
+        })
     }
 
     /// Parse colons options
@@ -1011,17 +1025,20 @@ impl Config {
                     Some(RuleOptions::Indentation {
                         spaces: IndentConfig::Fixed(n),
                     }) => Box::new(IndentationRule::with_spaces(*n)),
-                    Some(RuleOptions::IndentationWithSequences { spaces, sequences }) => {
-                        Box::new(ConfiguredIndentation {
-                            rule: IndentationRule {
-                                spaces: match spaces {
-                                    IndentConfig::Fixed(n) => IndentSpaces::Fixed(*n),
-                                    IndentConfig::Consistent => IndentSpaces::Consistent,
-                                },
+                    Some(RuleOptions::IndentationWithSequences {
+                        spaces,
+                        sequences,
+                        check_multi_line_strings,
+                    }) => Box::new(ConfiguredIndentation {
+                        rule: IndentationRule {
+                            spaces: match spaces {
+                                IndentConfig::Fixed(n) => IndentSpaces::Fixed(*n),
+                                IndentConfig::Consistent => IndentSpaces::Consistent,
                             },
-                            sequences: *sequences,
-                        })
-                    }
+                        },
+                        sequences: *sequences,
+                        check_multi_line_strings: *check_multi_line_strings,
+                    }),
                     _ => Box::new(IndentationRule::new()),
                 },
                 "new-lines" => Box::new(crate::rules::new_lines::NewLinesRule { newline_type }),

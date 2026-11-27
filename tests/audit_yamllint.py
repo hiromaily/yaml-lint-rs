@@ -4,6 +4,7 @@
 import argparse
 from collections import Counter, defaultdict
 import json
+import locale
 import os
 from pathlib import Path
 import subprocess
@@ -40,7 +41,12 @@ def audit(binary, upstream):
                 # The upstream fixture mocks both Windows and Unix line endings.
                 new_lines_settings["type"] = "dos" if new_lines.linesep == "\r\n" else "unix"
 
-            config.write_text(yaml.safe_dump({"extends": "default", "rules": rules}), encoding="utf-8")
+            rust_settings = {"extends": "default", "rules": rules}
+            collation = locale.setlocale(locale.LC_COLLATE)
+            if rule == "key-ordering" and collation not in {"C", "POSIX"}:
+                # The upstream tests set the Python process locale directly.
+                rust_settings["locale"] = collation
+            config.write_text(yaml.safe_dump(rust_settings), encoding="utf-8")
             source.write_bytes(data.encode("utf-8") if isinstance(data, str) else data)
             result = subprocess.run(
                 [binary, "-j", "1", "-c", config, "-f", "json", source],
