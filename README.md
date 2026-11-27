@@ -8,7 +8,7 @@ Built with [Claude Code](https://www.anthropic.com/claude-code) and [Cursor](htt
 
 - ⚡ **20-60x faster** than Python yamllint (see [benchmarks](#performance))
 - 📦 **Single binary** - no runtime dependencies required
-- 🔧 **Drop-in replacement** - compatible with yamllint config format
+- 🔧 **yamllint compatibility** - supports yamllint configuration files and matches all 992 [audited v1.38.0 fixtures](docs/yamllint-compatibility.md)
 - 🦀 **Memory safe** - written in Rust
 
 ## Features
@@ -280,9 +280,10 @@ ignore: |
 - **key-ordering** checks the order of mapping keys.
 - **quoted-strings** controls when and how strings are quoted.
 
-The registry covers all 23 yamllint rule names. See the
-[rule reference](docs/lint-rules.md#phase-3-rules) for options and compatibility
-details.
+The registry covers all 23 yamllint rule names. The v1.38.0 fixture audit
+compares diagnostic locations, rule IDs, severity, and messages across the
+rule and syntax tests. See the [rule reference](docs/lint-rules.md#phase-3-rules)
+and [audit results](docs/yamllint-compatibility.md).
 
 ## Exit Codes
 
@@ -326,6 +327,9 @@ The [contribution guide](docs/contributing.md) covers CLI regression tests and h
 ## License
 
 MIT
+
+The bundled [yaml-rust2 0.13.2 scanner and event parser](core/src/yaml_rust2/README.md)
+retain their upstream MIT and Apache 2.0 license texts.
 
 ## Acknowledgments
 
