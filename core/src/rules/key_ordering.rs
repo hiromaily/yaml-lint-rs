@@ -2,7 +2,7 @@
 
 use super::{
     LintContext, Rule,
-    tokens::{Patterns, problem, scan},
+    tokens::{Patterns, is_property, problem, scan},
 };
 use crate::problem::LintProblem;
 use serde::Deserialize;
@@ -35,7 +35,9 @@ impl Rule for KeyOrderingRule {
                     let Some(Some(previous)) = collections.last_mut() else {
                         continue;
                     };
-                    let Some(Token(mark, Scalar(_, key))) = tokens.get(index + 1) else {
+                    let Some(Token(mark, Scalar(_, key))) =
+                        tokens[index + 1..].iter().find(|token| !is_property(token))
+                    else {
                         continue;
                     };
                     if self.ignored_keys.matches(key) {
@@ -55,5 +57,18 @@ impl Rule for KeyOrderingRule {
             }
         }
         problems
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compares_scalar_keys_with_node_properties() {
+        let content = "z: 1\n&anchor a: 2\n!!str b: 3\n";
+        let problems = KeyOrderingRule::default().check(&LintContext::new(content.into()));
+        let locations: Vec<_> = problems.iter().map(|p| (p.line, p.column)).collect();
+        assert_eq!(locations, [(2, 9), (3, 7)]);
     }
 }

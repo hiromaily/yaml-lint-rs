@@ -2,7 +2,7 @@
 
 use super::{
     LintContext, Rule,
-    tokens::{Patterns, is_property, problem, scan},
+    tokens::{Patterns, is_property, problem, quoted_len, scan},
 };
 use crate::problem::LintProblem;
 use regex::Regex;
@@ -127,7 +127,14 @@ impl Rule for QuotedStringsRule {
     }
 
     fn check(&self, context: &LintContext) -> Vec<LintProblem> {
-        let tokens = scan(&context.content);
+        let source = &context.content;
+        let tokens = scan(source);
+        let check_continuations = self.required == Required::WhenNeeded
+            && (source.contains("\\\n") || source.contains("\\\r"));
+        // Scanner indices count characters. Map them to byte offsets only
+        // when we need to inspect the original spelling of a quoted scalar.
+        let byte_offsets: Option<Vec<_>> = (check_continuations && !source.is_ascii())
+            .then(|| source.char_indices().map(|(index, _)| index).collect());
         let mut flow_depth: usize = 0;
         let mut first_quote = None;
         let mut problems = Vec::new();
@@ -178,6 +185,12 @@ impl Rule for QuotedStringsRule {
                 && !extra_required
                 && !self.extra_allowed.matches(value)
                 && can_be_plain(value, flow_depth > 0)
+                && !(*style == DoubleQuoted && check_continuations && {
+                    let start = byte_offsets
+                        .as_ref()
+                        .map_or(mark.index(), |offsets| offsets[mark.index()]);
+                    joins_lines(&source[start..])
+                })
             {
                 format!("string {node} is redundantly quoted with {quote} quotes")
             } else if !self.accepts_style(*style, value, &mut first_quote) {
@@ -189,6 +202,16 @@ impl Rule for QuotedStringsRule {
         }
         problems
     }
+}
+
+fn joins_lines(source: &str) -> bool {
+    let mut bytes = source.as_bytes()[..quoted_len(source)].iter();
+    while let Some(byte) = bytes.next() {
+        if *byte == b'\\' && matches!(bytes.next(), Some(b'\r' | b'\n')) {
+            return true;
+        }
+    }
+    false
 }
 
 fn can_be_plain(value: &str, in_flow: bool) -> bool {
@@ -209,6 +232,21 @@ fn can_be_plain(value: &str, in_flow: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keeps_quotes_that_join_physical_lines() {
+        let rule = QuotedStringsRule {
+            required: Required::WhenNeeded,
+            ..QuotedStringsRule::default()
+        };
+        for ending in ["\n", "\r\n"] {
+            let content = format!(
+                "prefix: 日本語{ending}joined: \"word\\{ending}  part\"{ending}simple: \"plain\"{ending}"
+            );
+            let problems = rule.check(&LintContext::new(content));
+            assert_eq!(problems.iter().map(|p| p.line).collect::<Vec<_>>(), [4]);
+        }
+    }
 
     #[test]
     fn redundant_quotes_depend_on_yaml_context() {

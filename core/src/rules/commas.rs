@@ -1,9 +1,9 @@
 //! Flow collection comma spacing.
 
-use super::{LintContext, Rule, tokens::scan};
+use super::{LintContext, Rule};
 use crate::problem::{LintLevel, LintProblem};
 use serde::Deserialize;
-use yaml_rust2::scanner::{Token, TokenType::*};
+use yaml_rust2::scanner::{Scanner, Token, TokenType::*};
 
 /// Controls spacing around commas in flow collections.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -33,11 +33,11 @@ impl Rule for CommasRule {
         if !context.content.contains(',') {
             return Vec::new();
         }
-        let tokens = scan(&context.content);
+        let mut tokens = Scanner::new(context.content.chars()).peekable();
         let mut problems = Vec::new();
         let mut line_number = 0;
         let mut chars = Vec::new();
-        for (index, Token(mark, token)) in tokens.iter().enumerate() {
+        while let Some(Token(mark, token)) = tokens.next() {
             if !matches!(token, FlowEntry) {
                 continue;
             }
@@ -77,7 +77,7 @@ impl Rule for CommasRule {
                 report(mark.col().max(1), "too many spaces before comma");
             }
             if tokens
-                .get(index + 1)
+                .peek()
                 .is_some_and(|Token(next, _)| next.line() == mark.line())
                 && following.get(after).is_some_and(|&ch| ch != '#')
             {

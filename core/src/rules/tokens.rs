@@ -24,6 +24,26 @@ pub(super) fn has_tag(tokens: &[Token], index: usize) -> bool {
         .any(|token| matches!(token.1, TokenType::Tag(..)))
 }
 
+pub(super) fn quoted_len(source: &str) -> usize {
+    let mut bytes = source.bytes().enumerate();
+    let Some((_, quote)) = bytes.next() else {
+        return 0;
+    };
+    let mut bytes = bytes.peekable();
+    while let Some((index, byte)) = bytes.next() {
+        if quote == b'"' && byte == b'\\'
+            || quote == b'\''
+                && byte == quote
+                && bytes.peek().is_some_and(|&(_, next)| next == quote)
+        {
+            bytes.next();
+        } else if byte == quote {
+            return index + 1;
+        }
+    }
+    source.len()
+}
+
 #[derive(Debug, Clone, Default)]
 pub(super) struct Patterns(Vec<regex::Regex>);
 

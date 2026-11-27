@@ -1,5 +1,6 @@
 //! Line-level suppressions embedded in YAML comments.
 
+use super::tokens::quoted_len;
 use crate::problem::LintProblem;
 use std::{collections::HashSet, ops::Range};
 use yaml_rust2::scanner::{Scanner, TScalarStyle, Token, TokenType};
@@ -161,26 +162,6 @@ fn non_comment_ranges(content: &str) -> Option<Vec<Range<usize>>> {
         ranges.push(range);
     }
     Some(ranges)
-}
-
-fn quoted_len(source: &str) -> usize {
-    let mut bytes = source.bytes().enumerate();
-    let Some((_, quote)) = bytes.next() else {
-        return 0;
-    };
-    let mut bytes = bytes.peekable();
-    while let Some((index, byte)) = bytes.next() {
-        if quote == b'"' && byte == b'\\'
-            || quote == b'\''
-                && byte == quote
-                && bytes.peek().is_some_and(|&(_, next)| next == quote)
-        {
-            bytes.next();
-        } else if byte == quote {
-            return index + 1;
-        }
-    }
-    source.len()
 }
 
 fn plain_len(source: &str) -> usize {
