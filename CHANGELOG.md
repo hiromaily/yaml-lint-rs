@@ -11,9 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - File-level `# yamllint disable` directives.
 - GitHub Actions output format.
-- Remaining rules for full yamllint parity.
 - Watch mode for development.
 - Editor integration (LSP server).
+
+## [0.4.0] - 2026-11-27
+
+### Added
+
+- Added the nine remaining yamllint rules, bringing the registry to all 23 rule names.
+
+### Changed
+
+- Aligned built-in presets and file selection with yamllint.
+- Matched diagnostic positions, rule IDs, severity, and messages across all 992 audited yamllint v1.38.0 fixtures.
+- Bundled the YAML scanner and event parser so workspace and crates.io builds share the same compatibility fixes.
+
+### Fixed
+
+- Preserved configured rule severity across inherited configurations.
+- Improved YAML syntax and indentation diagnostics, including block scalars and multiline quoted values.
+- Preserved line directives when reporting terminal tabs.
 
 ## [0.3.0] - 2026-11-26
 
