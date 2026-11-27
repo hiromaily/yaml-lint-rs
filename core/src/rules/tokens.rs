@@ -12,6 +12,16 @@ pub(super) fn problem(mark: Marker, rule: &str, message: impl Into<String>) -> L
     LintProblem::new(mark.line(), mark.col() + 1, message, rule, LintLevel::Error)
 }
 
+pub(super) fn spaces_before(line: &str, column: usize) -> usize {
+    line.chars().take(column).fold(0, |count, ch| {
+        if matches!(ch, ' ' | '\t') {
+            count + 1
+        } else {
+            0
+        }
+    })
+}
+
 pub(super) fn is_property(token: &Token) -> bool {
     matches!(token.1, TokenType::Anchor(_) | TokenType::Tag(..))
 }

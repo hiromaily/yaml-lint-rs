@@ -1,7 +1,9 @@
 //! Hyphens rule - controls spacing after list item hyphens
 
-use crate::problem::{LintLevel, LintProblem};
+use super::tokens;
+use crate::problem::LintProblem;
 use crate::rules::{LintContext, Rule, RuleLevel};
+use yaml_rust2::scanner::{Scanner, Token, TokenType};
 
 /// Rule that controls spacing after list item hyphens in YAML sequences
 ///
@@ -39,76 +41,26 @@ impl Rule for HyphensRule {
     }
 
     fn check(&self, context: &LintContext) -> Vec<LintProblem> {
+        if !context.content.contains('-') {
+            return Vec::new();
+        }
         let mut problems = Vec::new();
-
-        for (line_idx, line) in context.lines.iter().enumerate() {
-            let trimmed = line.trim_start();
-
-            // Skip empty lines and comments
-            if trimmed.is_empty() || trimmed.starts_with('#') {
-                continue;
-            }
-
-            // Skip document markers (--- and ...)
-            if trimmed == "---"
-                || trimmed == "..."
-                || trimmed.starts_with("---")
-                || trimmed.starts_with("...")
+        for Token(mark, token) in Scanner::new(context.content.chars()) {
+            // BlockEntry's marker is after the separator and its whitespace.
+            if token == TokenType::BlockEntry
+                && let Some(line) = context.lines.get(mark.line() - 1)
+                && line.chars().nth(mark.col()).is_some()
+                && tokens::spaces_before(line, mark.col()) > self.max_spaces_after
             {
-                continue;
-            }
-
-            // Check if this is a list item (starts with -)
-            if !trimmed.starts_with('-') {
-                continue;
-            }
-
-            // Find the position of the hyphen in the original line
-            let leading_spaces = line.len() - trimmed.len();
-
-            // Check what comes after the hyphen
-            let after_hyphen = &trimmed[1..];
-
-            // Empty list item (just "-" or "- " at end of line) is valid
-            if after_hyphen.is_empty() || after_hyphen.trim().is_empty() {
-                continue;
-            }
-
-            // Count spaces after hyphen
-            let spaces_after = after_hyphen.len() - after_hyphen.trim_start().len();
-
-            // Check if there's no space after hyphen (invalid YAML for non-empty items)
-            if spaces_after == 0 {
-                // This could be a block scalar indicator like "-|" or "->"
-                // or an anchor/alias, so we should be careful
-                let first_char = after_hyphen.chars().next();
-                if !matches!(first_char, Some('|') | Some('>') | Some('&') | Some('*')) {
-                    problems.push(LintProblem::new(
-                        line_idx + 1,
-                        leading_spaces + 2, // Position after the hyphen
-                        "too few spaces after hyphen",
-                        self.name(),
-                        LintLevel::Error,
-                    ));
-                }
-                continue;
-            }
-
-            // Check if too many spaces after hyphen
-            if spaces_after > self.max_spaces_after {
                 problems.push(LintProblem::new(
-                    line_idx + 1,
-                    leading_spaces + 2, // Position after the hyphen
-                    format!(
-                        "too many spaces after hyphen ({} > {})",
-                        spaces_after, self.max_spaces_after
-                    ),
+                    mark.line(),
+                    mark.col(),
+                    "too many spaces after hyphen",
                     self.name(),
-                    LintLevel::Error,
+                    crate::LintLevel::Error,
                 ));
             }
         }
-
         problems
     }
 
@@ -151,7 +103,7 @@ mod tests {
         let problems = rule.check(&context);
 
         assert_eq!(problems.len(), 1);
-        assert!(problems[0].message.contains("(3 > 1)"));
+        assert_eq!(problems[0].column, 6);
     }
 
     #[test]
@@ -242,14 +194,13 @@ mod tests {
     }
 
     #[test]
-    fn test_no_space_after_hyphen() {
+    fn test_plain_scalar_starting_with_hyphen() {
         let yaml = "list:\n  -item\n";
         let context = LintContext::new(yaml.to_string());
         let rule = HyphensRule::new();
         let problems = rule.check(&context);
 
-        assert_eq!(problems.len(), 1);
-        assert!(problems[0].message.contains("too few spaces"));
+        assert!(problems.is_empty());
     }
 
     #[test]

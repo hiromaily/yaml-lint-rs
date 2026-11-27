@@ -11,6 +11,9 @@
   - [x] Support PCRE2 in rule pattern options
   - [x] Match duplicate-key diagnostics for scalar keys and support the merge-key option
   - [x] Apply top-level ignore patterns to CLI file discovery
-  - [ ] Match the remaining upstream configuration and diagnostics, including `yaml-files`, rule-level ignores, and syntax errors. Audit all 23 rules against upstream fixtures.
+  - [x] Support `yaml-files`, rule-level ignores, and `ignore-from-file`
+  - [x] Report YAML syntax errors as diagnostics during linting and fixing
+  - [x] [Audit all 23 rules against yamllint v1.38.0 fixtures](yamllint-compatibility.md)
+  - [ ] Resolve remaining differences in rule options, diagnostic positions and messages, and parser behavior
 - [x] Phase 4: Performance optimizations, parallel linting
 - [ ] Phase 5: Editor integration (LSP?)

@@ -7,8 +7,10 @@ pub mod config;
 pub mod fixer;
 pub mod linter;
 pub mod output;
+pub mod path_patterns;
 pub mod problem;
 pub mod rules;
+mod syntax;
 
 // Re-export main types for convenience
 pub use config::Config;

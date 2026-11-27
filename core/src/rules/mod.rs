@@ -17,6 +17,7 @@ pub mod empty_lines;
 pub mod empty_values;
 pub mod float_values;
 pub mod flow_collection;
+pub use flow_collection::FlowPolicy;
 pub mod hyphens;
 pub mod indentation;
 pub mod key_duplicates;
@@ -88,6 +89,7 @@ pub trait Rule: Send + Sync + std::fmt::Debug {
 pub struct RuleRegistry {
     rules: IndexMap<String, Box<dyn Rule>>,
     levels: IndexMap<String, RuleLevel>,
+    ignores: IndexMap<String, crate::path_patterns::PathPatterns>,
 }
 
 impl RuleRegistry {
@@ -96,6 +98,7 @@ impl RuleRegistry {
         Self {
             rules: IndexMap::new(),
             levels: IndexMap::new(),
+            ignores: IndexMap::new(),
         }
     }
 
@@ -167,12 +170,32 @@ impl RuleRegistry {
 
     /// Run all enabled rules and apply line-level comment directives.
     pub fn check_all(&self, context: &LintContext) -> Vec<LintProblem> {
+        self.check_for_path(context, None)
+    }
+
+    pub(crate) fn set_ignore(&mut self, name: &str, patterns: crate::path_patterns::PathPatterns) {
+        self.ignores.insert(name.to_owned(), patterns);
+    }
+
+    pub(crate) fn check_for_path(
+        &self,
+        context: &LintContext,
+        path: Option<&std::path::Path>,
+    ) -> Vec<LintProblem> {
         let mut problems = Vec::new();
+        let path = path
+            .filter(|_| !self.ignores.is_empty())
+            .map(crate::path_patterns::matching_path);
 
         for (name, rule) in &self.rules {
             let level = self.levels.get(name).copied().unwrap_or(RuleLevel::Error);
 
-            if level == RuleLevel::Disable {
+            if level == RuleLevel::Disable
+                || path
+                    .as_deref()
+                    .zip(self.ignores.get(name))
+                    .is_some_and(|(path, patterns)| patterns.matches(path))
+            {
                 continue;
             }
 

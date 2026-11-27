@@ -382,15 +382,13 @@ rules:
 }
 
 #[test]
-fn test_empty_truthy_allowed_values_error() {
-    let config_yaml = r#"
-rules:
-  truthy:
-    allowed-values: []
-"#;
-    let result = Config::load_from_str(config_yaml);
-    assert!(result.is_err(), "Expected error for empty allowed-values");
-    assert!(result.unwrap_err().to_string().contains("cannot be empty"));
+fn empty_truthy_allowlist_rejects_every_boolean_spelling() {
+    let config = Config::load_from_str("rules: {truthy: {allowed-values: []}}").unwrap();
+    let problems = Linter::new(config)
+        .lint_string("[true, false, yes, n]")
+        .unwrap();
+    assert_eq!(problems.len(), 3);
+    assert!(problems.iter().all(|problem| problem.rule == "truthy"));
 }
 
 #[test]
@@ -646,4 +644,99 @@ fn top_level_ignore_accepts_lines_and_lists() {
         assert_eq!(config.ignore, ["generated/", "!keep.yaml"]);
     }
     assert!(Config::load_from_str("ignore: true").is_err());
+}
+
+#[test]
+fn path_configuration_rejects_non_string_patterns() {
+    for yaml in [
+        "yaml-files: '*.yaml'",
+        "yaml-files: [true]",
+        "ignore: [42]",
+        "rules: {trailing-spaces: {ignore: true}}",
+        "rules: {trailing-spaces: {ignore: '*.yaml', ignore-from-file: .gitignore}}",
+    ] {
+        assert!(Config::load_from_str(yaml).is_err(), "{yaml}");
+    }
+}
+
+#[test]
+fn rule_ignores_apply_to_linting_and_fixing() {
+    use std::path::Path;
+    use yaml_lint_core::Fixer;
+
+    let config = Config::load_from_str(
+        "rules:\n  trailing-spaces:\n    ignore: |\n      /generated/\n      !keep.yaml\n  truthy: enable\n",
+    )
+    .unwrap();
+    let registry = config.create_registry();
+    let linter = Linter::new(config);
+    let source = "enabled: yes  \n";
+    let ignored = "generated/config.yaml";
+
+    let problems = linter
+        .lint_string_with_path(source, Some(Path::new(ignored)))
+        .unwrap();
+    assert_eq!(problems.len(), 1);
+    assert_eq!(problems[0].rule, "truthy");
+    assert_eq!(linter.lint_string(source).unwrap().len(), 2);
+    assert_eq!(
+        linter
+            .lint_string_with_path(source, Some(Path::new("generated/keep.yaml")))
+            .unwrap()
+            .len(),
+        2
+    );
+
+    let fixer = Fixer::new(&registry);
+    assert!(!fixer.dry_run(ignored, source).has_fixes());
+    assert!(fixer.dry_run("generated/keep.yaml", source).has_fixes());
+}
+
+#[test]
+fn truthy_respects_yaml_versions_and_scalar_styles() {
+    let config = Config::load_from_str("rules: {truthy: {allowed-values: [\"false\"]}}").unwrap();
+    let linter = Linter::new(config);
+    let yaml = "%YAML 1.2\n---\n[yes, TRUE, !!str True, 'True']\n...\n---\n[yes, false]\n";
+    let positions: Vec<_> = linter
+        .lint_string(yaml)
+        .unwrap()
+        .into_iter()
+        .map(|problem| (problem.line, problem.column, problem.rule))
+        .collect();
+    assert_eq!(
+        positions,
+        [(3, 7, "truthy".into()), (6, 2, "truthy".into())]
+    );
+}
+
+#[test]
+fn flow_rules_can_forbid_non_empty_collections() {
+    let config = Config::load_from_str(
+        "rules:\n  braces: {forbid: non-empty}\n  brackets: {forbid: non-empty}\n",
+    )
+    .unwrap();
+    let linter = Linter::new(config);
+    let input = "map: {\n  # kept empty\n  }\nlist: []\na: {x: 1}\nb: [x]\n";
+    let positions: Vec<_> = linter
+        .lint_string(input)
+        .unwrap()
+        .into_iter()
+        .map(|problem| (problem.line, problem.column, problem.rule))
+        .collect();
+    assert_eq!(
+        positions,
+        [(5, 5, "braces".into()), (6, 5, "brackets".into())]
+    );
+}
+
+#[test]
+fn colons_handle_explicit_keys_containing_mappings() {
+    let config = Config::load_from_str("rules: {colons: enable}").unwrap();
+    let linter = Linter::new(config);
+    let problems = linter
+        .lint_string("? a: 1\n: value\nflow: {key:  value}\n")
+        .unwrap();
+    assert_eq!(problems.len(), 1);
+    assert_eq!(problems[0].rule, "colons");
+    assert_eq!((problems[0].line, problems[0].column), (3, 13));
 }
