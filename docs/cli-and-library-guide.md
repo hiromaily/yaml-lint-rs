@@ -129,6 +129,11 @@ ignore: |
   *.generated.yaml
 ```
 
+The CLI applies `ignore` to explicitly named YAML files and to files found
+when walking directories. A list of strings works as well as a multiline
+string. A leading slash anchors a pattern to the working directory. Use
+`--list-files` to see the files selected by the configuration.
+
 ### Presets
 
 #### default

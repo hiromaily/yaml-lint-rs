@@ -45,7 +45,7 @@ pub(super) fn quoted_len(source: &str) -> usize {
 }
 
 #[derive(Debug, Clone, Default)]
-pub(super) struct Patterns(Vec<regex::Regex>);
+pub(super) struct Patterns(Vec<pcre2::bytes::Regex>);
 
 impl Patterns {
     pub(super) fn is_empty(&self) -> bool {
@@ -53,7 +53,9 @@ impl Patterns {
     }
 
     pub(super) fn matches(&self, value: &str) -> bool {
-        self.0.iter().any(|pattern| pattern.is_match(value))
+        self.0
+            .iter()
+            .any(|pattern| pattern.is_match(value.as_bytes()).unwrap_or(false))
     }
 }
 
@@ -61,8 +63,8 @@ impl PartialEq for Patterns {
     fn eq(&self, other: &Self) -> bool {
         self.0
             .iter()
-            .map(regex::Regex::as_str)
-            .eq(other.0.iter().map(regex::Regex::as_str))
+            .map(pcre2::bytes::Regex::as_str)
+            .eq(other.0.iter().map(pcre2::bytes::Regex::as_str))
     }
 }
 
@@ -70,7 +72,13 @@ impl<'de> Deserialize<'de> for Patterns {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Vec::<String>::deserialize(deserializer)?
             .iter()
-            .map(|pattern| regex::Regex::new(pattern).map_err(serde::de::Error::custom))
+            .map(|pattern| {
+                pcre2::bytes::RegexBuilder::new()
+                    .utf(true)
+                    .ucp(true)
+                    .build(pattern)
+                    .map_err(serde::de::Error::custom)
+            })
             .collect::<Result<Vec<_>, _>>()
             .map(Self)
     }

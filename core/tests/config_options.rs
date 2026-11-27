@@ -554,3 +554,96 @@ fn phase_3_invalid_configuration_is_reported() {
         );
     }
 }
+
+#[test]
+fn phase_3_pcre_patterns_reach_key_ordering_and_quoted_strings() {
+    let config = Config::load_from_str(
+        r"rules:
+  key-ordering: {ignored-keys: ['^(\w+)\1$']}
+  quoted-strings:
+    required: only-when-needed
+    extra-required: ['^force(?=me$)']
+    extra-allowed: ['(?<=let)me$']
+",
+    )
+    .unwrap();
+    let yaml = "b: plain\nああ: forceme\nc: 'letme'\na: forceyou\n";
+    let problems = Linter::new(config).lint_string(yaml).unwrap();
+    let diagnostics: Vec<_> = problems
+        .iter()
+        .map(|p| (p.line, p.column, p.rule.as_str()))
+        .collect();
+    assert_eq!(
+        diagnostics,
+        [(2, 5, "quoted-strings"), (4, 1, "key-ordering")]
+    );
+}
+
+#[test]
+fn phase_3_invalid_locale_is_reported() {
+    for value in ["42", "yaml_lint_nonexistent_locale", r#""bad\0locale""#] {
+        let error = Config::load_from_str(&format!("locale: {value}\n")).unwrap_err();
+        assert!(error.to_string().contains("locale"), "{error}");
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn phase_3_locale_controls_key_ordering() {
+    let lint = |settings: &str, rule: &str| {
+        let config = Config::load_from_str(&format!("{settings}rules:\n  key-ordering: {rule}\n"))?;
+        Linter::new(config).lint_string("a: 1\nB: 2\n")
+    };
+
+    let problems = lint("", "enable").unwrap();
+    assert_eq!((problems[0].line, problems[0].column), (2, 1));
+    assert_eq!(
+        problems[0].message,
+        "wrong ordering of key \"B\" in mapping"
+    );
+    assert_eq!(lint("locale: C\n", "enable").unwrap(), problems);
+
+    // Minimal Linux environments may only have the C locale installed.
+    let settings = "locale: en_US.UTF-8\n";
+    if cfg!(target_os = "linux") && Config::load_from_str(settings).is_err() {
+        return;
+    }
+    assert!(lint(settings, "enable").unwrap().is_empty());
+    assert!(lint(settings, "{ignored-keys: ['^z']}").unwrap().is_empty());
+    assert_eq!(lint("", "enable").unwrap(), problems);
+}
+
+#[test]
+fn duplicate_keys_follow_yaml_scopes_and_merge_key_configuration() {
+    let yaml = concat!(
+        "block: |\n  artefact: 1\n  artefact: 2\n",
+        "flow: {é: 1, \"é\": 2, <<: {}, <<: {}}\n",
+        "list:\n  - key: 1\n    key: 2\n  - key: 3\n",
+        "---\nblock: 2\n"
+    );
+    for (option, expected) in [
+        ("{}", vec![(4, 14), (7, 5)]),
+        (
+            "{forbid-duplicated-merge-keys: true}",
+            vec![(4, 14), (4, 30), (7, 5)],
+        ),
+    ] {
+        let config =
+            Config::load_from_str(&format!("rules:\n  key-duplicates: {option}\n")).unwrap();
+        let problems = Linter::new(config).lint_string(yaml).unwrap();
+        let positions: Vec<_> = problems.iter().map(|p| (p.line, p.column)).collect();
+        assert_eq!(positions, expected);
+    }
+}
+
+#[test]
+fn top_level_ignore_accepts_lines_and_lists() {
+    for settings in [
+        "ignore: |\n  generated/\n  !keep.yaml\n",
+        "ignore: ['generated/', '!keep.yaml']",
+    ] {
+        let config = Config::load_from_str(settings).unwrap();
+        assert_eq!(config.ignore, ["generated/", "!keep.yaml"]);
+    }
+    assert!(Config::load_from_str("ignore: true").is_err());
+}

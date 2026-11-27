@@ -2,12 +2,13 @@
 
 use anyhow::{Context, Result, ensure};
 use clap::{Parser, ValueEnum};
+use ignore::gitignore::GitignoreBuilder;
 use is_terminal::IsTerminal;
 use rayon::prelude::*;
 use serde::Serialize;
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use walkdir::WalkDir;
 use yaml_lint_core::{Config, Fixer, LintLevel, LintProblem, Linter};
 
@@ -86,7 +87,7 @@ fn main() -> Result<()> {
     let config = load_config(&cli)?;
 
     // Collect YAML files
-    let yaml_files = collect_yaml_files(&cli.paths)?;
+    let yaml_files = collect_yaml_files(&cli.paths, &config.ignore)?;
 
     if cli.list_files {
         for file in &yaml_files {
@@ -343,7 +344,7 @@ fn load_config(cli: &Cli) -> Result<Config> {
 }
 
 /// Collect all YAML files from the given paths
-fn collect_yaml_files(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
+fn collect_yaml_files(paths: &[PathBuf], ignore: &[String]) -> Result<Vec<PathBuf>> {
     let mut yaml_files = Vec::new();
 
     for path in paths {
@@ -375,11 +376,42 @@ fn collect_yaml_files(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
         return Err(anyhow::anyhow!("No YAML files found"));
     }
 
+    if !ignore.is_empty() {
+        let current_dir = std::env::current_dir()?;
+        let mut builder = GitignoreBuilder::new(".");
+        for (index, pattern) in ignore.iter().enumerate() {
+            // Store the source line index so file and directory matches can be
+            // compared in configuration order.
+            builder
+                .add_line(Some(PathBuf::from(index.to_string())), pattern)
+                .with_context(|| format!("Invalid ignore pattern {pattern:?}"))?;
+        }
+        let matcher = builder.build().context("Invalid ignore patterns")?;
+        yaml_files.retain(|path| {
+            let candidate: PathBuf = path
+                .strip_prefix(&current_dir)
+                .unwrap_or(path)
+                .components()
+                .skip_while(|part| matches!(part, Component::Prefix(_) | Component::RootDir))
+                .collect();
+            let last_match = candidate
+                .ancestors()
+                .enumerate()
+                .map(|(depth, ancestor)| matcher.matched(ancestor, depth != 0))
+                .filter_map(|matched| {
+                    let index = matched.inner()?.from()?.to_str()?.parse::<usize>().ok()?;
+                    Some((index, matched.is_ignore()))
+                })
+                .max_by_key(|(index, _)| *index);
+            !last_match.is_some_and(|(_, ignored)| ignored)
+        });
+    }
+
     Ok(yaml_files)
 }
 
 /// Check if a file is a YAML file based on extension
-fn is_yaml_file(path: &std::path::Path) -> bool {
+fn is_yaml_file(path: &Path) -> bool {
     if let Some(ext) = path.extension() {
         matches!(ext.to_str(), Some("yaml") | Some("yml"))
     } else {
@@ -411,6 +443,31 @@ fn should_use_colors(mode: &ColorMode) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ignore_patterns_filter_discovered_and_explicit_files() {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures");
+        let invalid = fixtures.join("invalid");
+        let duplicate = invalid.join("duplicate-keys.yaml");
+        let trailing = invalid.join("trailing-spaces.yaml");
+        let patterns = ["invalid/".into(), "!duplicate-keys.yaml".into()];
+
+        assert_eq!(
+            collect_yaml_files(std::slice::from_ref(&invalid), &patterns).unwrap(),
+            [duplicate]
+        );
+        assert!(
+            collect_yaml_files(&[trailing], &patterns)
+                .unwrap()
+                .is_empty()
+        );
+        let reversed = ["!duplicate-keys.yaml".into(), "invalid/".into()];
+        assert!(
+            collect_yaml_files(&[invalid], &reversed)
+                .unwrap()
+                .is_empty()
+        );
+    }
 
     #[test]
     fn test_is_yaml_file() {

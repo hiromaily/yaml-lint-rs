@@ -115,7 +115,9 @@ key: value
 **Configurable**: No
 **Fixable**: ❌ No (ambiguous which to keep)
 
-Detects duplicate keys in YAML mappings.
+Detects duplicate scalar keys in block and flow mappings. Set
+`forbid-duplicated-merge-keys` to true to report repeated `<<` merge keys.
+The option defaults to false.
 
 **Why it matters**: Duplicate keys in YAML can lead to unexpected behavior. Most parsers will silently use only the last value.
 
@@ -524,7 +526,7 @@ or a settings mapping such as `{}`.
 | `document-end` | Disabled | Disabled | `present` defaults to true to require `...` at the end of each document. Use false to forbid it. |
 | `empty-values` | Disabled | Disabled | `forbid-in-block-mappings`, `forbid-in-flow-mappings`, and `forbid-in-block-sequences` default to true. Explicit nulls and quoted empty strings are accepted. |
 | `float-values` | Disabled | Disabled | `require-numeral-before-decimal`, `forbid-scientific-notation`, `forbid-nan`, and `forbid-inf` default to false. |
-| `key-ordering` | Disabled | Disabled | `ignored-keys` is a list of regex patterns and defaults to an empty list. Keys are ordered by Unicode code point. |
+| `key-ordering` | Disabled | Disabled | `ignored-keys` is a list of regex patterns and defaults to an empty list. Keys are ordered by Unicode code point unless a top-level `locale` is configured. |
 | `octal-values` | Disabled | Disabled | `forbid-implicit-octal` and `forbid-explicit-octal` default to true. |
 | `quoted-strings` | Disabled | Disabled | `quote-type` defaults to `any` and also accepts `single`, `double`, or `consistent`. `required` defaults to true and also accepts false or `only-when-needed`. |
 
@@ -535,8 +537,13 @@ escaping a quote in the value. Both options default to false. Use
 require quotes on matching strings. Use `extra-allowed` with
 `required: only-when-needed` to allow quotes on matching strings.
 
-Pattern options use Rust regex syntax. Locale-aware collation and PCRE-only
-patterns remain compatibility gaps.
+The `ignored-keys`, `extra-required`, and `extra-allowed` options use PCRE2
+with Unicode character classes. Each pattern can match anywhere in the
+scalar. For example, `'^(\w+)\1$'` matches a scalar made of a repeated word.
+
+On Linux and macOS, top-level `locale: en_US.UTF-8` selects an installed system
+locale for `key-ordering`. Use `locale: ""` to select the environment's locale.
+An unavailable locale produces a configuration error.
 
 ## Custom Rules
 
