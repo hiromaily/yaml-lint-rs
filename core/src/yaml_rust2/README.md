@@ -16,6 +16,7 @@ Local scanner changes
   continued plain scalar so the linter can avoid a duplicate diagnosis.
 - Allow outdented quoted continuations so the indentation rule can
   diagnose them using their original source positions.
+- Report tabs in end-of-line token whitespace at the first tab.
 
 Local parser changes
 

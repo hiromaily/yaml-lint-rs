@@ -3,6 +3,7 @@
 use super::new_lines::split_ending;
 use crate::problem::{LintLevel, LintProblem};
 use crate::rules::{LintContext, Rule, RuleLevel};
+use crate::yaml_rust2::scanner::{Scanner, TERMINAL_TAB_ERROR};
 
 /// Rule that detects trailing spaces at the end of lines
 #[derive(Debug)]
@@ -45,12 +46,27 @@ impl Rule for TrailingSpacesRule {
 
     fn fix(&self, content: &str, _problem: &LintProblem) -> Option<String> {
         let suppressed = super::directives::lines_for_rule(content, self.name());
+        let terminal_tab_line = if content.contains('\t') {
+            let mut scanner = Scanner::new(content.chars());
+            scanner.by_ref().for_each(drop);
+            scanner
+                .get_error()
+                .filter(|error| error.info() == TERMINAL_TAB_ERROR)
+                .map(|error| error.marker().line())
+        } else {
+            None
+        };
         let mut result = String::with_capacity(content.len());
         let mut changed = false;
         for (index, chunk) in content.split_inclusive('\n').enumerate() {
             let (line, ending) = split_ending(chunk);
-            if !suppressed.contains(&(index + 1)) && line.ends_with([' ', '\t']) {
-                result.push_str(line.trim_end_matches([' ', '\t']));
+            let trimmed = line.trim_end_matches([' ', '\t']);
+            // Scanning stops at the first invalid tab. Preserve tab-bearing
+            // suffixes from that line onward while still fixing spaces.
+            let unscanned_tab = terminal_tab_line.is_some_and(|first| index + 1 >= first)
+                && line[trimmed.len()..].contains('\t');
+            if !suppressed.contains(&(index + 1)) && trimmed != line && !unscanned_tab {
+                result.push_str(trimmed);
                 result.push_str(ending);
                 changed = true;
             } else {

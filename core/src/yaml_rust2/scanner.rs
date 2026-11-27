@@ -19,6 +19,8 @@ use super::char_traits::{
     is_flow, is_hex, is_tag_char, is_uri_char, is_z,
 };
 
+pub(crate) const TERMINAL_TAB_ERROR: &str = r"found character '\t' that cannot start any token";
+
 /// The encoding of the input. Currently, only UTF-8 is supported.
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub enum TEncoding {
@@ -850,7 +852,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 // inside of flow-style constructs. Tabs are allowed as part of leading
                 // whitespaces outside of indentation.
                 // If a flow-style construct is in an indented block, its contents must still be
-                // indented. Also, tabs are allowed anywhere in it if it has no content.
+                // indented.
                 '\t' if self.is_within_block()
                     && self.leading_whitespace
                     && (self.mark.col as isize) < self.indent =>
@@ -864,7 +866,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                         ));
                     }
                 }
-                '\t' | ' ' => self.skip_blank(),
+                '\t' => {
+                    self.skip_ws_to_eol(SkipTabs::Yes)?;
+                }
+                ' ' => self.skip_blank(),
                 '\n' | '\r' => {
                     self.lookahead(2);
                     self.skip_linebreak();
@@ -922,7 +927,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
     /// Skip yaml whitespace at most up to eol. Also skips comments.
     fn skip_ws_to_eol(&mut self, skip_tabs: SkipTabs) -> Result<SkipTabs, ScanError> {
-        let mut encountered_tab = false;
+        let mut first_tab = None;
         let mut has_yaml_ws = false;
         loop {
             match self.look_ch() {
@@ -931,11 +936,11 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     self.skip_blank();
                 }
                 '\t' if skip_tabs != SkipTabs::No => {
-                    encountered_tab = true;
+                    first_tab.get_or_insert(self.mark);
                     self.skip_blank();
                 }
                 // YAML comments must be preceded by whitespace.
-                '#' if !encountered_tab && !has_yaml_ws => {
+                '#' if first_tab.is_none() && !has_yaml_ws => {
                     return Err(ScanError::new(
                         self.mark,
                         "comments must be separated from other tokens by whitespace",
@@ -945,12 +950,18 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                     while !is_breakz(self.look_ch()) {
                         self.skip_non_blank();
                     }
+                    return Ok(SkipTabs::Result(first_tab.is_some(), has_yaml_ws));
                 }
                 _ => break,
             }
         }
 
-        Ok(SkipTabs::Result(encountered_tab, has_yaml_ws))
+        if let Some(tab) = first_tab
+            && is_breakz(self.ch())
+        {
+            return Err(ScanError::new(tab, TERMINAL_TAB_ERROR));
+        }
+        Ok(SkipTabs::Result(first_tab.is_some(), has_yaml_ws))
     }
 
     fn fetch_stream_start(&mut self) {
@@ -2254,14 +2265,17 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
 
             // Process blank characters.
+            let mut first_tab = None;
             while is_blank(self.look_ch()) || is_break(self.ch()) {
                 if is_blank(self.ch()) {
                     if !self.leading_whitespace {
+                        if self.ch() == '\t' {
+                            first_tab.get_or_insert(self.mark);
+                        }
                         whitespaces.push(self.ch());
                         self.skip_blank();
                     } else if (self.mark.col as isize) < indent && self.ch() == '\t' {
-                        // Tabs in an indentation columns are allowed if and only if the line is
-                        // empty. Skip to the end of the line.
+                        // Preserve the scanner's handling of comments after a tab.
                         self.skip_ws_to_eol(SkipTabs::Yes)?;
                         if !is_breakz(self.ch()) {
                             return Err(ScanError::new(
@@ -2270,9 +2284,15 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                             ));
                         }
                     } else {
+                        if self.ch() == '\t' {
+                            first_tab.get_or_insert(self.mark);
+                        }
                         self.skip_blank();
                     }
                 } else {
+                    if let Some(tab) = first_tab {
+                        return Err(ScanError::new(tab, TERMINAL_TAB_ERROR));
+                    }
                     self.lookahead(2);
                     // Check if it is a first line break
                     if self.leading_whitespace {
@@ -2283,6 +2303,11 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                         self.leading_whitespace = true;
                     }
                 }
+            }
+            if let Some(tab) = first_tab
+                && is_z(self.ch())
+            {
+                return Err(ScanError::new(tab, TERMINAL_TAB_ERROR));
             }
 
             // check indentation level

@@ -1,5 +1,5 @@
 use crate::yaml_rust2::parser::{Event, Parser};
-use crate::yaml_rust2::scanner::{Marker, Scanner, Token, TokenType};
+use crate::yaml_rust2::scanner::{Marker, Scanner, TERMINAL_TAB_ERROR, Token, TokenType};
 use crate::{LintLevel, LintProblem};
 
 pub(crate) fn check(content: &str, problems: &mut Vec<LintProblem>) {
@@ -33,7 +33,10 @@ pub(crate) fn check(content: &str, problems: &mut Vec<LintProblem>) {
                         && problem.line == position.0
                         && problem.column == 1
                         && problem.rule == "indentation";
-                    !same_position && !same_continuation
+                    let same_terminal_tab = error.info() == TERMINAL_TAB_ERROR
+                        && problem.line == position.0
+                        && problem.rule == "trailing-spaces";
+                    !same_position && !same_continuation && !same_terminal_tab
                 });
                 problems.push(LintProblem::new(
                     position.0,
@@ -78,6 +81,56 @@ fn compatible_message(content: &str, mark: Marker, message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use crate::{Config, Fixer, LintLevel, Linter};
+
+    #[test]
+    fn reports_terminal_tabs_at_token_boundaries_in_lint_and_fix() {
+        let config = Config::load_from_str("rules:\n  trailing-spaces: enable\n").unwrap();
+        let registry = config.create_registry();
+        let fixer = Fixer::new(&registry);
+        let linter = Linter::new(config);
+        let message = r"found character '\t' that cannot start any token";
+        for (source, position) in [
+            ("\t\t\t\n", (1, 1)),
+            ("---\nsome: text\t\n", (2, 11)),
+            ("---\nsome: text \t \r\n", (2, 12)),
+            ("---\nsome: 'text'\t", (2, 13)),
+        ] {
+            assert_syntax(&linter, source, position, message);
+            let fix = fixer.dry_run("tabs.yaml", source);
+            assert!(!fix.has_fixes());
+            assert_eq!(fix.unfixable_problems, linter.lint_string(source).unwrap());
+        }
+
+        let source = "one: text  \nsome: text\t\nother: text  \n";
+        let fix = fixer.dry_run("tabs.yaml", source);
+        assert_eq!(
+            fix.fixed_content.as_deref(),
+            Some("one: text\nsome: text\t\nother: text\n")
+        );
+        assert_eq!(
+            (
+                fix.unfixable_problems[0].line,
+                fix.unfixable_problems[0].column
+            ),
+            (2, 11)
+        );
+    }
+
+    #[test]
+    fn keeps_tabs_in_scalar_content_comments_and_separators() {
+        let linter =
+            Linter::new(Config::load_from_str("rules: {trailing-spaces: disable}").unwrap());
+        for source in [
+            "some: 'text\t'\n",
+            "some: |\n  text\t\n",
+            "# comment\t\n",
+            "some: text\t # comment\n",
+            "some: \ttext\n",
+            "some: [first,\t second]\n",
+        ] {
+            assert!(linter.lint_string(source).unwrap().is_empty(), "{source:?}");
+        }
+    }
 
     #[test]
     fn quoted_continuations_keep_original_indentation_positions() {
