@@ -11,6 +11,7 @@ pub mod path_patterns;
 pub mod problem;
 pub mod rules;
 mod syntax;
+mod yaml_rust2;
 
 // Re-export main types for convenience
 pub use config::Config;

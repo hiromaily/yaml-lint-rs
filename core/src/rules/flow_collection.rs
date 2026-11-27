@@ -2,7 +2,7 @@
 
 use super::{LintContext, tokens};
 use crate::LintProblem;
-use yaml_rust2::scanner::{Scanner, Token, TokenType};
+use crate::yaml_rust2::scanner::{Scanner, Token, TokenType};
 
 /// Whether flow collections are allowed.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

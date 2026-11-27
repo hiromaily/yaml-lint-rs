@@ -5,10 +5,10 @@ use super::{
     tokens::{has_tag, problem, scan},
 };
 use crate::problem::LintProblem;
+use crate::yaml_rust2::scanner::{TScalarStyle::Plain, Token, TokenType::Scalar};
 use regex::Regex;
 use serde::Deserialize;
 use std::sync::LazyLock;
-use yaml_rust2::scanner::{TScalarStyle::Plain, Token, TokenType::Scalar};
 
 static DECIMAL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^[+-]?\.[0-9]+(?:[eE][+-]?[0-9]+)?$").expect("valid decimal pattern")

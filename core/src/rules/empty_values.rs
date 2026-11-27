@@ -5,8 +5,8 @@ use super::{
     tokens::{problem, scan},
 };
 use crate::problem::LintProblem;
+use crate::yaml_rust2::scanner::{Token, TokenType::*};
 use serde::Deserialize;
-use yaml_rust2::scanner::{Token, TokenType::*};
 
 /// Controls which collections permit implicit null values.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -65,11 +65,15 @@ impl Rule for EmptyValuesRule {
                 {
                     Some("empty value in block mapping")
                 }
-                BlockEntry
+                BlockEntry(_)
                     if self.forbid_in_block_sequences
                         && matches!(
                             next,
-                            Key | BlockEntry | BlockEnd | DocumentEnd | DocumentStart | StreamEnd
+                            Key | BlockEntry(_)
+                                | BlockEnd
+                                | DocumentEnd
+                                | DocumentStart
+                                | StreamEnd
                         ) =>
                 {
                     Some("empty value in block sequence")

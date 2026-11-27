@@ -5,14 +5,14 @@ use super::{
     tokens::{Patterns, is_property, problem, quoted_len, scan},
 };
 use crate::problem::LintProblem;
-use regex::Regex;
-use serde::{Deserialize, Deserializer};
-use std::sync::LazyLock;
-use yaml_rust2::scanner::{
+use crate::yaml_rust2::scanner::{
     TScalarStyle::{self, *},
     Token,
     TokenType::*,
 };
+use regex::Regex;
+use serde::{Deserialize, Deserializer};
+use std::sync::LazyLock;
 
 static TYPED: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(concat!(

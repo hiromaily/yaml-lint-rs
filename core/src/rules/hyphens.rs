@@ -3,7 +3,7 @@
 use super::tokens;
 use crate::problem::LintProblem;
 use crate::rules::{LintContext, Rule, RuleLevel};
-use yaml_rust2::scanner::{Scanner, Token, TokenType};
+use crate::yaml_rust2::scanner::{Scanner, Token, TokenType};
 
 /// Rule that controls spacing after list item hyphens in YAML sequences
 ///
@@ -47,7 +47,7 @@ impl Rule for HyphensRule {
         let mut problems = Vec::new();
         for Token(mark, token) in Scanner::new(context.content.chars()) {
             // BlockEntry's marker is after the separator and its whitespace.
-            if token == TokenType::BlockEntry
+            if matches!(token, TokenType::BlockEntry(_))
                 && let Some(line) = context.lines.get(mark.line() - 1)
                 && line.chars().nth(mark.col()).is_some()
                 && tokens::spaces_before(line, mark.col()) > self.max_spaces_after

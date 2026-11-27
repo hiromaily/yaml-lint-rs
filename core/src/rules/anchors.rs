@@ -2,9 +2,9 @@
 
 use super::{LintContext, Rule, tokens::problem};
 use crate::problem::LintProblem;
+use crate::yaml_rust2::scanner::{Scanner, Token, TokenType::*};
 use serde::Deserialize;
 use std::collections::HashMap;
-use yaml_rust2::scanner::{Scanner, Token, TokenType::*};
 
 /// Checks declarations and uses of anchors within each document.
 #[derive(Debug, Clone, PartialEq, Deserialize)]

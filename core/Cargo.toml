@@ -12,7 +12,7 @@ keywords = ["yaml", "linter", "lint", "validation", "config"]
 categories = ["development-tools", "command-line-utilities", "config"]
 
 [dependencies]
-yaml-rust2 = { workspace = true }
+arraydeque = "0.5.1"
 serde = { workspace = true }
 serde_yaml = { workspace = true }
 thiserror = { workspace = true }

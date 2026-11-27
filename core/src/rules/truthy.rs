@@ -2,7 +2,7 @@
 
 use super::{LintContext, Rule, RuleLevel, tokens};
 use crate::problem::LintProblem;
-use yaml_rust2::scanner::{TScalarStyle, TokenType};
+use crate::yaml_rust2::scanner::{TScalarStyle, TokenType};
 
 pub(crate) const YAML_11_VALUES: &[&str] = &[
     "YES", "Yes", "yes", "NO", "No", "no", "TRUE", "True", "true", "FALSE", "False", "false", "ON",
@@ -49,8 +49,8 @@ impl Rule for TruthyRule {
         let mut values = YAML_11_VALUES;
         let mut previous = None;
         let mut problems = Vec::new();
-        for yaml_rust2::scanner::Token(mark, token) in
-            yaml_rust2::scanner::Scanner::new(context.content.chars())
+        for crate::yaml_rust2::scanner::Token(mark, token) in
+            crate::yaml_rust2::scanner::Scanner::new(context.content.chars())
         {
             match &token {
                 TokenType::VersionDirective(1, 2) => values = YAML_12_VALUES,

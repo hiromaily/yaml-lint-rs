@@ -3,8 +3,8 @@
 use super::{directives::non_comment_ranges, tokens::scan};
 use crate::problem::{LintLevel, LintProblem};
 use crate::rules::{LintContext, Rule};
+use crate::yaml_rust2::scanner::{TScalarStyle, Token, TokenType::*};
 use std::collections::HashSet;
-use yaml_rust2::scanner::{TScalarStyle, Token, TokenType::*};
 
 /// Indentation configuration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -355,15 +355,15 @@ fn scalar_header_indent(context: &LintContext, preceding: &[Token], body_line: u
     let Some(Token(mark, kind)) = preceding
         .iter()
         .rev()
-        .find(|Token(_, kind)| matches!(kind, Value | Key | BlockEntry))
+        .find(|Token(_, kind)| matches!(kind, Value | Key | BlockEntry(_)))
         .filter(|Token(mark, _)| mark.line() == header_line)
     else {
         return line_indent;
     };
     let explicit = header.chars().nth(mark.col()) == Some('?')
         || matches!(kind, Value) && mark.col() == line_indent;
-    if explicit || matches!(kind, BlockEntry) {
-        if matches!(kind, BlockEntry) {
+    if explicit || matches!(kind, BlockEntry(_)) {
+        if matches!(kind, BlockEntry(_)) {
             return mark.col();
         }
         return header
@@ -514,7 +514,7 @@ fn check_block_indentation(
                     continue;
                 };
                 let mut value = *location;
-                let sequence = matches!(kind, BlockSequenceStart | BlockEntry);
+                let sequence = matches!(kind, BlockSequenceStart | BlockEntry(_));
                 if matches!(kind, BlockMappingStart)
                     && let Some(Token(key, Key)) = values.peek()
                 {
@@ -535,7 +535,7 @@ fn check_block_indentation(
                 }
                 // An indentless sequence has no start token. Its entry marker
                 // points after the dash and any separating whitespace.
-                let column = if matches!(kind, BlockEntry) {
+                let column = if matches!(kind, BlockEntry(_)) {
                     let Some(line) = context.lines.get(value.line() - 1) else {
                         continue;
                     };
@@ -591,17 +591,12 @@ fn check_block_indentation(
                     LintLevel::Error,
                 ));
             }
-            BlockEntry => {
+            BlockEntry(dash) => {
                 let Some(line) = context.lines.get(mark.line() - 1) else {
                     continue;
                 };
-                let before_entry: String = line.chars().take(mark.col()).collect();
-                let before_dash = before_entry.trim_end_matches([' ', '\t']);
-                let Some(prefix) = before_dash.strip_suffix('-') else {
-                    continue;
-                };
-                let column = prefix.chars().count();
-                if prefix.bytes().all(|byte| byte == b' ') {
+                let column = dash.col();
+                if line.bytes().take(column).all(|byte| byte == b' ') {
                     checked_lines.insert(mark.line());
                 }
                 let Some(Token(child, kind)) = tokens.get(index + 1) else {
@@ -617,31 +612,43 @@ fn check_block_indentation(
                 if child.line() <= mark.line()
                     || matches!(
                         kind,
-                        BlockEnd
-                            | BlockEntry
-                            | DocumentEnd
-                            | DocumentStart
-                            | StreamEnd
-                            | Scalar(TScalarStyle::Literal | TScalarStyle::Folded, _)
+                        BlockEnd | BlockEntry(_) | DocumentEnd | DocumentStart | StreamEnd
                     )
                 {
                     continue;
                 }
-                if child.col() > column {
-                    let expected = column.saturating_add(
-                        width.get_or_insert((child.line(), child.col() - column)).1,
-                    );
-                    if child.col() != expected {
-                        problems.push(LintProblem::new(
-                            child.line(),
-                            child.col() + 1,
-                            format!(
-                                "wrong indentation: expected {expected} but found {}",
-                                child.col()
-                            ),
-                            "indentation",
-                            LintLevel::Error,
-                        ));
+                let (child_line, child_column) = if matches!(
+                    kind,
+                    Scalar(TScalarStyle::Literal | TScalarStyle::Folded, _)
+                ) {
+                    if matches!(line.chars().nth(mark.col()), Some('|' | '>')) {
+                        continue;
+                    }
+                    // yaml-rust2 marks the scalar body rather than the header.
+                    let Some((offset, header)) = context.lines[mark.line()..]
+                        .iter()
+                        .take(child.line() - mark.line())
+                        .enumerate()
+                        .find(|(_, line)| {
+                            let text = line.trim_start();
+                            !text.is_empty() && !text.starts_with('#')
+                        })
+                        .filter(|(_, line)| line.trim_start().starts_with(['|', '>']))
+                    else {
+                        continue;
+                    };
+                    (
+                        mark.line() + offset + 1,
+                        header.len() - header.trim_start().len(),
+                    )
+                } else {
+                    (child.line(), child.col())
+                };
+                if child_column > column {
+                    let expected = column
+                        .saturating_add(width.get_or_insert((child_line, child_column - column)).1);
+                    if child_column != expected {
+                        problems.push(indentation_problem(child_line, child_column, expected));
                     }
                 }
             }
@@ -796,6 +803,19 @@ fn detect_indent_size(context: &LintContext) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn checks_block_scalar_header_after_bare_sequence_entry() {
+        for indicator in ['|', '>'] {
+            let yaml = format!("---\n-\n  -\n     {indicator}\n      multi\n      line\n...\n");
+            let rule = IndentationRule::new();
+            let problems = rule.check(&LintContext::new(yaml));
+            assert_eq!(problems, vec![indentation_problem(4, 5, 4)]);
+
+            let yaml = format!("---\n-\n  -\n    {indicator}\n      multi\n      line\n...\n");
+            assert!(rule.check(&LintContext::new(yaml)).is_empty());
+        }
+    }
 
     #[test]
     fn test_correct_indentation() {

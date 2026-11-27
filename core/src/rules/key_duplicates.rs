@@ -5,9 +5,9 @@ use super::{
     tokens::{problem, scan},
 };
 use crate::problem::LintProblem;
+use crate::yaml_rust2::scanner::{TScalarStyle, Token, TokenType::*};
 use serde::Deserialize;
 use std::collections::HashSet;
-use yaml_rust2::scanner::{TScalarStyle, Token, TokenType::*};
 
 /// Rule that detects duplicate keys in mappings.
 #[derive(Debug)]
